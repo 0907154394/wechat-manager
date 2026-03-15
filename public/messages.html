@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hộp thư tin nhắn</title>
+    <style>
+        *{box-sizing:border-box}
+        body{
+            margin:0;
+            font-family:Arial,sans-serif;
+            background:#0b1730;
+            color:#fff;
+        }
+        .container{
+            width:min(1000px,96%);
+            margin:30px auto;
+        }
+        .card{
+            background:#14274a;
+            border-radius:16px;
+            padding:20px;
+            margin-bottom:20px;
+            box-shadow:0 10px 24px rgba(0,0,0,0.28);
+        }
+        .message{
+            background:#10213f;
+            border-radius:12px;
+            padding:14px;
+            margin-bottom:12px;
+        }
+        .sender{
+            color:#67e8f9;
+            font-weight:bold;
+            margin-bottom:8px;
+        }
+        .time{
+            color:#94a3b8;
+            font-size:12px;
+            margin-top:8px;
+        }
+        textarea,input{
+            width:100%;
+            box-sizing:border-box;
+            padding:12px;
+            border-radius:10px;
+            border:none;
+            margin-bottom:10px;
+            background:#123a70;
+            color:#fff;
+        }
+        button{
+            padding:10px 16px;
+            border:none;
+            border-radius:10px;
+            background:#2563eb;
+            color:#fff;
+            cursor:pointer;
+            font-weight:700;
+        }
+        h1,h2{
+            margin-top:0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="card">
+            <h1>Hộp thư tin nhắn</h1>
+            <div id="accountInfo">Đang tải...</div>
+        </div>
+
+        <div class="card">
+            <h2>Thêm tin nhắn test</h2>
+            <input id="sender" placeholder="Người gửi">
+            <input id="subject" placeholder="Tiêu đề">
+            <textarea id="content" rows="4" placeholder="Nội dung tin nhắn"></textarea>
+            <button onclick="addMessage()">Gửi tin nhắn test</button>
+        </div>
+
+        <div class="card">
+            <h2>Danh sách tin nhắn</h2>
+            <div id="messageList"></div>
+        </div>
+    </div>
+
+    <script>
+        let currentToken = "";
+        let currentEmail = "";
+
+        window.onload = function () {
+            const params = new URLSearchParams(window.location.search);
+            currentToken = params.get("token") || "";
+            if (!currentToken) {
+                document.getElementById("accountInfo").innerText = "Thiếu token";
+                return;
+            }
+            loadMessages();
+        };
+
+        async function loadMessages() {
+            const res = await fetch("/api/messages/" + encodeURIComponent(currentToken));
+            const data = await res.json();
+
+            if (!res.ok) {
+                document.getElementById("accountInfo").innerText = data.message || "Không tải được dữ liệu";
+                return;
+            }
+
+            currentEmail = data.account.email;
+
+            document.getElementById("accountInfo").innerHTML = `
+                Email: <b>${escapeHtml(data.account.email)}</b><br>
+                WeChat ID: <b>${escapeHtml(data.account.wechatId || "-")}</b><br>
+                Trạng thái: <b>${escapeHtml(data.account.status)}</b><br>
+                Token: <b>${escapeHtml(data.account.messageToken)}</b>
+            `;
+
+            let html = "";
+            data.messages.forEach(msg => {
+                html += `
+                    <div class="message">
+                        <div class="sender">${escapeHtml(msg.sender)}</div>
+                        <div><b>${escapeHtml(msg.subject || "(Không có tiêu đề)")}</b></div>
+                        <div>${escapeHtml(msg.content)}</div>
+                        <div class="time">${new Date(msg.createdAt).toLocaleString()}</div>
+                    </div>
+                `;
+            });
+
+            document.getElementById("messageList").innerHTML = html || "Chưa có tin nhắn nào.";
+        }
+
+        async function addMessage() {
+            const sender = document.getElementById("sender").value.trim();
+            const subject = document.getElementById("subject").value.trim();
+            const content = document.getElementById("content").value.trim();
+
+            if (!currentEmail || !content) {
+                alert("Thiếu dữ liệu");
+                return;
+            }
+
+            const res = await fetch("/api/messages/add-test", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify({
+                    email: currentEmail,
+                    sender: sender || "System",
+                    subject,
+                    content
+                })
+            });
+
+            const data = await res.json();
+
+            if (!res.ok) {
+                alert(data.message || "Lỗi");
+                return;
+            }
+
+            document.getElementById("sender").value = "";
+            document.getElementById("subject").value = "";
+            document.getElementById("content").value = "";
+            loadMessages();
+        }
+
+        function escapeHtml(value) {
+            return String(value)
+                .replaceAll("&", "&amp;")
+                .replaceAll("<", "&lt;")
+                .replaceAll(">", "&gt;")
+                .replaceAll('"', "&quot;")
+                .replaceAll("'", "&#039;");
+        }
+    </script>
+</body>
+</html>

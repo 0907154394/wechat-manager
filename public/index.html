@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WeChat Account Manager</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="page-shell">
+        <div class="container">
+
+            <header class="page-header">
+                <h1>WeChat Account Manager</h1>
+            </header>
+
+            <section class="stats">
+                <div class="box active-box">
+                    <h2 id="total">0</h2>
+                    <p>Tất cả</p>
+                </div>
+                <div class="box">
+                    <h2 id="unsold">0</h2>
+                    <p>Chưa bán</p>
+                </div>
+                <div class="box">
+                    <h2 id="sold">0</h2>
+                    <p>Đã bán</p>
+                </div>
+            </section>
+
+            <section class="card">
+                <h3>IMAP Worker</h3>
+
+                <div class="worker-head">
+                    <div class="worker-title">
+                        <span class="worker-name">IMAP Worker</span>
+                        <span id="workerStatusBadge" class="worker-badge offline">OFFLINE</span>
+                    </div>
+
+                    <div class="worker-actions">
+                        <button type="button" class="sell-btn" onclick="startWorker()">Start</button>
+                        <button type="button" class="unsell-btn" onclick="stopWorker()">Stop</button>
+                        <button type="button" class="link-btn" onclick="reloadWorker()">Reload Accounts</button>
+                    </div>
+                </div>
+
+                <div id="workerInfo" class="worker-info">
+                    Worker service chưa chạy trên PC.
+                </div>
+            </section>
+
+            <section class="card">
+                <h3>Import Mail</h3>
+                <p class="import-note">
+                    Format mỗi dòng: email|password|imapHost|imapPort|imapUser|imapPass|secure
+                </p>
+
+                <div id="dropZone" class="drop-zone">
+                    <p>Kéo & thả file CSV vào đây</p>
+                    <p>hoặc</p>
+                    <input id="excelFileInput" type="file" accept=".csv" hidden>
+                    <button type="button" onclick="document.getElementById('excelFileInput').click()">
+                        Chọn file CSV
+                    </button>
+                    <div id="selectedFileName" class="selected-file-name"></div>
+                </div>
+
+                <textarea
+                    id="importMailRows"
+                    class="import-area"
+                    placeholder="acc001@yourshop.com|123123|imap.yourhost.com|993|acc001@yourshop.com|password|true"
+                ></textarea>
+
+                <div class="form-row">
+                    <button type="button" onclick="importMail()">Import Text</button>
+                    <button type="button" onclick="uploadExcelFile()">Import CSV</button>
+                </div>
+            </section>
+
+            <section class="card">
+                <h3>Tạo email biến thể theo domain riêng</h3>
+
+                <div class="form-row create-row">
+                    <input id="baseEmail" type="text" placeholder="Email gốc (vd: abc@yourshop.com)">
+                    <input id="quantity" type="number" min="1" placeholder="Số lượng muốn tạo">
+                    <input id="password" type="text" placeholder="Password">
+                    <button type="button" onclick="createAccounts()">Tạo biến thể</button>
+                </div>
+
+                <p class="import-note">
+                    App sẽ chỉ chèn dấu <b>.</b> vào phần trước <b>@</b>, giữ nguyên domain, và chỉ tạo theo số lượng bạn nhập.
+                </p>
+            </section>
+
+            <section class="card">
+                <h3>Danh sách tài khoản</h3>
+
+                <div class="toolbar">
+                    <div class="form-row filter-row">
+                        <input id="filterDomain" type="text" placeholder="Lọc theo email / wechat / token" oninput="filterAccounts()">
+                        <select id="filterStatus" onchange="filterAccounts()">
+                            <option value="">Trạng thái</option>
+                            <option value="CHUA BAN">Chưa bán</option>
+                            <option value="DA BAN">Đã bán</option>
+                        </select>
+                        <button type="button" onclick="exportAccounts()">Export</button>
+                    </div>
+                </div>
+
+                <div class="table-wrap">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th style="width:70px">ID</th>
+                                <th>Email</th>
+                                <th style="width:140px">Password</th>
+                                <th style="width:140px">Trạng thái</th>
+                                <th style="width:170px">Acc WeChat</th>
+                                <th style="width:190px">Link token</th>
+                                <th style="width:190px">Token tin nhắn</th>
+                                <th style="width:430px">Thao tác</th>
+                            </tr>
+                        </thead>
+                        <tbody id="table"></tbody>
+                    </table>
+                </div>
+            </section>
+
+        </div>
+    </div>
+
+    <script src="script.js?v=100"></script>
+</body>
+</html>
