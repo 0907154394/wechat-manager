@@ -76,9 +76,9 @@ async function loadAccounts() {
 }
 
 async function createAccounts() {
-    const baseEmail = document.getElementById("baseEmail").value.trim();
-    const quantityValue = document.getElementById("quantity").value.trim();
-    const password = document.getElementById("password").value.trim();
+    const baseEmail = document.getElementById("baseEmail")?.value.trim() || "";
+    const quantityValue = document.getElementById("quantity")?.value.trim() || "";
+    const password = document.getElementById("password")?.value.trim() || "";
 
     const quantity = Number.parseInt(quantityValue, 10);
 
@@ -120,9 +120,13 @@ async function createAccounts() {
 
         alert(`Đã tạo ${Array.isArray(data) ? data.length : 0} email biến thể`);
 
-        document.getElementById("baseEmail").value = "";
-        document.getElementById("quantity").value = "";
-        document.getElementById("password").value = "";
+        const baseEmailEl = document.getElementById("baseEmail");
+        const quantityEl = document.getElementById("quantity");
+        const passwordEl = document.getElementById("password");
+
+        if (baseEmailEl) baseEmailEl.value = "";
+        if (quantityEl) quantityEl.value = "";
+        if (passwordEl) passwordEl.value = "";
 
         await loadAccounts();
     } catch (err) {
@@ -225,9 +229,13 @@ function renderTable(data) {
 }
 
 function updateStats(data) {
-    document.getElementById("total").innerText = data.length;
-    document.getElementById("sold").innerText = data.filter(a => a.status === "DA BAN").length;
-    document.getElementById("unsold").innerText = data.filter(a => a.status !== "DA BAN").length;
+    const totalEl = document.getElementById("total");
+    const soldEl = document.getElementById("sold");
+    const unsoldEl = document.getElementById("unsold");
+
+    if (totalEl) totalEl.innerText = data.length;
+    if (soldEl) soldEl.innerText = data.filter(a => a.status === "DA BAN").length;
+    if (unsoldEl) unsoldEl.innerText = data.filter(a => a.status !== "DA BAN").length;
 }
 
 function filterAccounts() {
@@ -257,7 +265,10 @@ function filterAccounts() {
 
 async function sell(id) {
     try {
-        const res = await fetch("/api/accounts/sell/" + id, { method: "PUT" });
+        const res = await fetch("/api/accounts/sell/" + id, {
+            method: "PUT"
+        });
+
         const data = await safeJson(res);
 
         if (!res.ok) {
@@ -274,7 +285,10 @@ async function sell(id) {
 
 async function unsell(id) {
     try {
-        const res = await fetch("/api/accounts/unsell/" + id, { method: "PUT" });
+        const res = await fetch("/api/accounts/unsell/" + id, {
+            method: "PUT"
+        });
+
         const data = await safeJson(res);
 
         if (!res.ok) {
@@ -299,8 +313,12 @@ async function updateWechatId(id) {
     try {
         const res = await fetch("/api/accounts/wechat-id/" + id, {
             method: "PUT",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ wechatId: wechatId.trim() })
+            headers: {
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify({
+                wechatId: wechatId.trim()
+            })
         });
 
         const data = await safeJson(res);
@@ -319,7 +337,10 @@ async function updateWechatId(id) {
 
 async function changeLink(id) {
     try {
-        const res = await fetch("/api/accounts/change-link/" + id, { method: "PUT" });
+        const res = await fetch("/api/accounts/change-link/" + id, {
+            method: "PUT"
+        });
+
         const data = await safeJson(res);
 
         if (!res.ok) {
@@ -357,7 +378,10 @@ async function deleteAccount(id) {
     if (!ok) return;
 
     try {
-        const res = await fetch("/api/accounts/" + id, { method: "DELETE" });
+        const res = await fetch("/api/accounts/" + id, {
+            method: "DELETE"
+        });
+
         const data = await safeJson(res);
 
         if (!res.ok) {
@@ -385,12 +409,16 @@ function exportAccounts() {
         content += `"${csvSafe(a.email)}","${csvSafe(a.password)}","${csvSafe(a.status)}","${csvSafe(a.wechatId)}","${csvSafe(a.linkToken)}","${csvSafe(a.messageToken)}"\n`;
     });
 
-    const blob = new Blob([content], { type: "text/csv;charset=utf-8;" });
+    const blob = new Blob([content], {
+        type: "text/csv;charset=utf-8;"
+    });
+
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
     link.download = "accounts.csv";
     link.click();
+
     URL.revokeObjectURL(url);
 }
 
@@ -428,7 +456,10 @@ async function loadWorkerStatus() {
 
 async function startWorker() {
     try {
-        const res = await fetch("/api/worker/start", { method: "POST" });
+        const res = await fetch("/api/worker/start", {
+            method: "POST"
+        });
+
         const data = await safeJson(res);
 
         if (!res.ok) {
@@ -446,7 +477,10 @@ async function startWorker() {
 
 async function stopWorker() {
     try {
-        const res = await fetch("/api/worker/stop", { method: "POST" });
+        const res = await fetch("/api/worker/stop", {
+            method: "POST"
+        });
+
         const data = await safeJson(res);
 
         if (!res.ok) {
@@ -464,7 +498,10 @@ async function stopWorker() {
 
 async function reloadWorker() {
     try {
-        const res = await fetch("/api/worker/reload", { method: "POST" });
+        const res = await fetch("/api/worker/reload", {
+            method: "POST"
+        });
+
         const data = await safeJson(res);
 
         if (!res.ok) {
@@ -491,7 +528,9 @@ async function importMail() {
     try {
         const res = await fetch("/api/accounts/import-mail", {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
+            headers: {
+                "Content-Type": "application/json"
+            },
             body: JSON.stringify({ rows })
         });
 
@@ -554,10 +593,44 @@ async function uploadExcelFile() {
 
 async function copyText(text, successMessage = "Đã copy") {
     try {
-        await navigator.clipboard.writeText(text);
-        alert(successMessage);
+        if (navigator.clipboard && window.isSecureContext) {
+            await navigator.clipboard.writeText(text);
+            alert(successMessage);
+            return;
+        }
+
+        fallbackCopyText(text, successMessage);
     } catch (err) {
         console.error("copyText error:", err);
+        fallbackCopyText(text, successMessage);
+    }
+}
+
+function fallbackCopyText(text, successMessage = "Đã copy") {
+    try {
+        const textArea = document.createElement("textarea");
+        textArea.value = text;
+
+        textArea.style.position = "fixed";
+        textArea.style.left = "-999999px";
+        textArea.style.top = "-999999px";
+        textArea.setAttribute("readonly", "");
+
+        document.body.appendChild(textArea);
+        textArea.focus();
+        textArea.select();
+        textArea.setSelectionRange(0, textArea.value.length);
+
+        const successful = document.execCommand("copy");
+        document.body.removeChild(textArea);
+
+        if (successful) {
+            alert(successMessage);
+        } else {
+            alert("Copy thất bại");
+        }
+    } catch (err) {
+        console.error("fallbackCopyText error:", err);
         alert("Copy thất bại");
     }
 }
