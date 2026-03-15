@@ -12,6 +12,7 @@
 
             <header class="page-header">
                 <h1>WeChat Account Manager</h1>
+                <p class="page-subtitle">Quản lý account, token và hộp thư nhắn tin</p>
             </header>
 
             <section class="stats">
@@ -30,7 +31,10 @@
             </section>
 
             <section class="card">
-                <h3>IMAP Worker</h3>
+                <div class="section-head">
+                    <h3>IMAP Worker</h3>
+                    <span class="section-badge">Auto check mail</span>
+                </div>
 
                 <div class="worker-head">
                     <div class="worker-title">
@@ -51,14 +55,18 @@
             </section>
 
             <section class="card">
-                <h3>Import Mail</h3>
+                <div class="section-head">
+                    <h3>Import Mail</h3>
+                    <span class="section-badge">CSV only</span>
+                </div>
+
                 <p class="import-note">
-                    Format mỗi dòng: email|password|imapHost|imapPort|imapUser|imapPass|secure
+                    Chỉ hỗ trợ import bằng file CSV.
                 </p>
 
                 <div id="dropZone" class="drop-zone">
-                    <p>Kéo & thả file CSV vào đây</p>
-                    <p>hoặc</p>
+                    <p class="drop-title">Kéo & thả file CSV vào đây</p>
+                    <p class="drop-or">hoặc</p>
                     <input id="excelFileInput" type="file" accept=".csv" hidden>
                     <button type="button" onclick="document.getElementById('excelFileInput').click()">
                         Chọn file CSV
@@ -66,20 +74,16 @@
                     <div id="selectedFileName" class="selected-file-name"></div>
                 </div>
 
-                <textarea
-                    id="importMailRows"
-                    class="import-area"
-                    placeholder="acc001@yourshop.com|123123|imap.yourhost.com|993|acc001@yourshop.com|password|true"
-                ></textarea>
-
                 <div class="form-row">
-                    <button type="button" onclick="importMail()">Import Text</button>
                     <button type="button" onclick="uploadExcelFile()">Import CSV</button>
                 </div>
             </section>
 
             <section class="card">
-                <h3>Tạo email biến thể theo domain riêng</h3>
+                <div class="section-head">
+                    <h3>Tạo email biến thể theo domain riêng</h3>
+                    <span class="section-badge">Dot variant</span>
+                </div>
 
                 <div class="form-row create-row">
                     <input id="baseEmail" type="text" placeholder="Email gốc (vd: abc@yourshop.com)">
@@ -94,7 +98,10 @@
             </section>
 
             <section class="card">
-                <h3>Danh sách tài khoản</h3>
+                <div class="section-head">
+                    <h3>Danh sách tài khoản</h3>
+                    <span class="section-badge">Panel Admin</span>
+                </div>
 
                 <div class="toolbar">
                     <div class="form-row filter-row">
@@ -130,6 +137,6 @@
         </div>
     </div>
 
-    <script src="script.js?v=100"></script>
+    <script src="script.js?v=202"></script>
 </body>
 </html>

@@ -265,10 +265,7 @@ function filterAccounts() {
 
 async function sell(id) {
     try {
-        const res = await fetch("/api/accounts/sell/" + id, {
-            method: "PUT"
-        });
-
+        const res = await fetch("/api/accounts/sell/" + id, { method: "PUT" });
         const data = await safeJson(res);
 
         if (!res.ok) {
@@ -285,10 +282,7 @@ async function sell(id) {
 
 async function unsell(id) {
     try {
-        const res = await fetch("/api/accounts/unsell/" + id, {
-            method: "PUT"
-        });
-
+        const res = await fetch("/api/accounts/unsell/" + id, { method: "PUT" });
         const data = await safeJson(res);
 
         if (!res.ok) {
@@ -378,10 +372,7 @@ async function deleteAccount(id) {
     if (!ok) return;
 
     try {
-        const res = await fetch("/api/accounts/" + id, {
-            method: "DELETE"
-        });
-
+        const res = await fetch("/api/accounts/" + id, { method: "DELETE" });
         const data = await safeJson(res);
 
         if (!res.ok) {
@@ -418,7 +409,6 @@ function exportAccounts() {
     link.href = url;
     link.download = "accounts.csv";
     link.click();
-
     URL.revokeObjectURL(url);
 }
 
@@ -456,10 +446,7 @@ async function loadWorkerStatus() {
 
 async function startWorker() {
     try {
-        const res = await fetch("/api/worker/start", {
-            method: "POST"
-        });
-
+        const res = await fetch("/api/worker/start", { method: "POST" });
         const data = await safeJson(res);
 
         if (!res.ok) {
@@ -477,10 +464,7 @@ async function startWorker() {
 
 async function stopWorker() {
     try {
-        const res = await fetch("/api/worker/stop", {
-            method: "POST"
-        });
-
+        const res = await fetch("/api/worker/stop", { method: "POST" });
         const data = await safeJson(res);
 
         if (!res.ok) {
@@ -498,10 +482,7 @@ async function stopWorker() {
 
 async function reloadWorker() {
     try {
-        const res = await fetch("/api/worker/reload", {
-            method: "POST"
-        });
-
+        const res = await fetch("/api/worker/reload", { method: "POST" });
         const data = await safeJson(res);
 
         if (!res.ok) {
@@ -513,43 +494,6 @@ async function reloadWorker() {
         alert("Reload accounts thành công");
     } catch (err) {
         console.error("reloadWorker error:", err);
-        alert("Lỗi kết nối server");
-    }
-}
-
-async function importMail() {
-    const rows = document.getElementById("importMailRows")?.value.trim() || "";
-
-    if (!rows) {
-        alert("Vui lòng nhập dữ liệu mail");
-        return;
-    }
-
-    try {
-        const res = await fetch("/api/accounts/import-mail", {
-            method: "POST",
-            headers: {
-                "Content-Type": "application/json"
-            },
-            body: JSON.stringify({ rows })
-        });
-
-        const data = await safeJson(res);
-
-        if (!res.ok) {
-            alert(data.message || "Import mail thất bại");
-            return;
-        }
-
-        alert(`Import thành công. Created: ${data.created}, Updated: ${data.updated}`);
-
-        const importArea = document.getElementById("importMailRows");
-        if (importArea) importArea.value = "";
-
-        await loadAccounts();
-        await loadWorkerStatus();
-    } catch (err) {
-        console.error("importMail error:", err);
         alert("Lỗi kết nối server");
     }
 }
@@ -610,7 +554,6 @@ function fallbackCopyText(text, successMessage = "Đã copy") {
     try {
         const textArea = document.createElement("textarea");
         textArea.value = text;
-
         textArea.style.position = "fixed";
         textArea.style.left = "-999999px";
         textArea.style.top = "-999999px";

@@ -13,8 +13,6 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
-
-// static files
 app.use(express.static(path.join(__dirname, "public")));
 
 const MONGODB_URI =
@@ -22,7 +20,6 @@ const MONGODB_URI =
 
 const PORT = process.env.PORT || 3000;
 
-// MongoDB connect
 mongoose
     .connect(MONGODB_URI)
     .then(() => {
@@ -32,12 +29,10 @@ mongoose
         console.error("MongoDB error:", err.message);
     });
 
-// API routes
 app.use("/api/accounts", accountRoutes);
 app.use("/api/messages", messageRoutes);
 app.use("/api/worker", workerRoutes);
 
-// test route
 app.get("/ping", (req, res) => {
     res.send("pong");
 });
@@ -49,12 +44,10 @@ app.get("/health", (req, res) => {
     });
 });
 
-// trang chủ
 app.get("/", (req, res) => {
     res.sendFile(path.join(__dirname, "public", "index.html"));
 });
 
-// route khách mở link token
 app.get("/m/:token", async (req, res) => {
     try {
         const fullLinkToken = "/m/" + String(req.params.token).trim();
@@ -78,12 +71,10 @@ app.get("/m/:token", async (req, res) => {
     }
 });
 
-// fallback cho file không tồn tại
 app.use((req, res) => {
     res.status(404).send("Not Found");
 });
 
-// start server
 app.listen(PORT, "0.0.0.0", () => {
     console.log(`Server running on port ${PORT}`);
 });
