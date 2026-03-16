@@ -3,26 +3,27 @@ const bcrypt = require("bcryptjs");
 
 const router = express.Router();
 
-const ADMIN_USERNAME = process.env.ADMIN_USERNAME || "admin";
-const ADMIN_PASSWORD_HASH =
-    process.env.ADMIN_PASSWORD_HASH || bcrypt.hashSync("admin123", 10);
-
 router.post("/login", async (req, res) => {
     try {
         const username = String(req.body.username || "").trim();
         const password = String(req.body.password || "");
 
+        const envUsername = String(process.env.ADMIN_USERNAME || "admin").trim();
+        const envHash = String(process.env.ADMIN_PASSWORD_HASH || "");
+
         if (!username || !password) {
-            return res
-                .status(400)
-                .json({ message: "Vui lòng nhập tài khoản và mật khẩu" });
+            return res.status(400).json({ message: "Vui lòng nhập tài khoản và mật khẩu" });
         }
 
-        if (username !== ADMIN_USERNAME) {
+        if (!envHash) {
+            return res.status(500).json({ message: "Thiếu ADMIN_PASSWORD_HASH trên Render" });
+        }
+
+        if (username !== envUsername) {
             return res.status(401).json({ message: "Sai tài khoản hoặc mật khẩu" });
         }
 
-        const ok = await bcrypt.compare(password, ADMIN_PASSWORD_HASH);
+        const ok = await bcrypt.compare(password, envHash);
 
         if (!ok) {
             return res.status(401).json({ message: "Sai tài khoản hoặc mật khẩu" });
