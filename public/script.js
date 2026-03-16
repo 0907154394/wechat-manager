@@ -4,9 +4,24 @@ let selectedExcelFile = null;
 
 window.onload = async () => {
     bindFileDrop();
+    await checkAdminSession();
     await loadAccounts();
     await loadWorkerStatus();
 };
+
+async function checkAdminSession() {
+    try {
+        const res = await fetch("/api/auth/me");
+        const data = await safeJson(res);
+
+        if (!res.ok || !data.isAdmin) {
+            window.location.href = "/login.html";
+        }
+    } catch (err) {
+        console.error("checkAdminSession error:", err);
+        window.location.href = "/login.html";
+    }
+}
 
 function bindFileDrop() {
     const dropZone = document.getElementById("dropZone");
@@ -56,8 +71,18 @@ function showSelectedFileName() {
 
 async function loadAccounts() {
     try {
-        const res = await fetch("/api/accounts");
+        const res = await fetch("/api/accounts", {
+            headers: {
+                "Accept": "application/json"
+            }
+        });
+
         const data = await safeJson(res);
+
+        if (res.status === 401) {
+            window.location.href = "/login.html";
+            return;
+        }
 
         if (!res.ok) {
             alert(data.message || "Không tải được dữ liệu");
@@ -102,7 +127,8 @@ async function createAccounts() {
         const res = await fetch("/api/accounts/create-bulk", {
             method: "POST",
             headers: {
-                "Content-Type": "application/json"
+                "Content-Type": "application/json",
+                "Accept": "application/json"
             },
             body: JSON.stringify({
                 baseEmail,
@@ -112,6 +138,11 @@ async function createAccounts() {
         });
 
         const data = await safeJson(res);
+
+        if (res.status === 401) {
+            window.location.href = "/login.html";
+            return;
+        }
 
         if (!res.ok) {
             alert(data.message || "Có lỗi khi tạo tài khoản");
@@ -265,8 +296,17 @@ function filterAccounts() {
 
 async function sell(id) {
     try {
-        const res = await fetch("/api/accounts/sell/" + id, { method: "PUT" });
+        const res = await fetch("/api/accounts/sell/" + id, {
+            method: "PUT",
+            headers: { "Accept": "application/json" }
+        });
+
         const data = await safeJson(res);
+
+        if (res.status === 401) {
+            window.location.href = "/login.html";
+            return;
+        }
 
         if (!res.ok) {
             alert(data.message || "Không cập nhật được trạng thái");
@@ -282,8 +322,17 @@ async function sell(id) {
 
 async function unsell(id) {
     try {
-        const res = await fetch("/api/accounts/unsell/" + id, { method: "PUT" });
+        const res = await fetch("/api/accounts/unsell/" + id, {
+            method: "PUT",
+            headers: { "Accept": "application/json" }
+        });
+
         const data = await safeJson(res);
+
+        if (res.status === 401) {
+            window.location.href = "/login.html";
+            return;
+        }
 
         if (!res.ok) {
             alert(data.message || "Không cập nhật được trạng thái");
@@ -308,7 +357,8 @@ async function updateWechatId(id) {
         const res = await fetch("/api/accounts/wechat-id/" + id, {
             method: "PUT",
             headers: {
-                "Content-Type": "application/json"
+                "Content-Type": "application/json",
+                "Accept": "application/json"
             },
             body: JSON.stringify({
                 wechatId: wechatId.trim()
@@ -316,6 +366,11 @@ async function updateWechatId(id) {
         });
 
         const data = await safeJson(res);
+
+        if (res.status === 401) {
+            window.location.href = "/login.html";
+            return;
+        }
 
         if (!res.ok) {
             alert(data.message || "Không cập nhật được WeChat ID");
@@ -332,10 +387,16 @@ async function updateWechatId(id) {
 async function changeLink(id) {
     try {
         const res = await fetch("/api/accounts/change-link/" + id, {
-            method: "PUT"
+            method: "PUT",
+            headers: { "Accept": "application/json" }
         });
 
         const data = await safeJson(res);
+
+        if (res.status === 401) {
+            window.location.href = "/login.html";
+            return;
+        }
 
         if (!res.ok) {
             alert(data.message || "Không đổi được link");
@@ -372,8 +433,17 @@ async function deleteAccount(id) {
     if (!ok) return;
 
     try {
-        const res = await fetch("/api/accounts/" + id, { method: "DELETE" });
+        const res = await fetch("/api/accounts/" + id, {
+            method: "DELETE",
+            headers: { "Accept": "application/json" }
+        });
+
         const data = await safeJson(res);
+
+        if (res.status === 401) {
+            window.location.href = "/login.html";
+            return;
+        }
 
         if (!res.ok) {
             alert(data.message || "Xóa account thất bại");
@@ -414,8 +484,16 @@ function exportAccounts() {
 
 async function loadWorkerStatus() {
     try {
-        const res = await fetch("/api/worker/status");
+        const res = await fetch("/api/worker/status", {
+            headers: { "Accept": "application/json" }
+        });
+
         const data = await safeJson(res);
+
+        if (res.status === 401) {
+            window.location.href = "/login.html";
+            return;
+        }
 
         const badge = document.getElementById("workerStatusBadge");
         const info = document.getElementById("workerInfo");
@@ -446,8 +524,17 @@ async function loadWorkerStatus() {
 
 async function startWorker() {
     try {
-        const res = await fetch("/api/worker/start", { method: "POST" });
+        const res = await fetch("/api/worker/start", {
+            method: "POST",
+            headers: { "Accept": "application/json" }
+        });
+
         const data = await safeJson(res);
+
+        if (res.status === 401) {
+            window.location.href = "/login.html";
+            return;
+        }
 
         if (!res.ok) {
             alert(data.message || "Không start được worker");
@@ -464,8 +551,17 @@ async function startWorker() {
 
 async function stopWorker() {
     try {
-        const res = await fetch("/api/worker/stop", { method: "POST" });
+        const res = await fetch("/api/worker/stop", {
+            method: "POST",
+            headers: { "Accept": "application/json" }
+        });
+
         const data = await safeJson(res);
+
+        if (res.status === 401) {
+            window.location.href = "/login.html";
+            return;
+        }
 
         if (!res.ok) {
             alert(data.message || "Không stop được worker");
@@ -482,8 +578,17 @@ async function stopWorker() {
 
 async function reloadWorker() {
     try {
-        const res = await fetch("/api/worker/reload", { method: "POST" });
+        const res = await fetch("/api/worker/reload", {
+            method: "POST",
+            headers: { "Accept": "application/json" }
+        });
+
         const data = await safeJson(res);
+
+        if (res.status === 401) {
+            window.location.href = "/login.html";
+            return;
+        }
 
         if (!res.ok) {
             alert(data.message || "Không reload được worker");
@@ -510,10 +615,16 @@ async function uploadExcelFile() {
     try {
         const res = await fetch("/api/accounts/import-mail-file", {
             method: "POST",
-            body: formData
+            body: formData,
+            headers: { "Accept": "application/json" }
         });
 
         const data = await safeJson(res);
+
+        if (res.status === 401) {
+            window.location.href = "/login.html";
+            return;
+        }
 
         if (!res.ok) {
             alert(data.message || "Import file thất bại");
@@ -576,6 +687,18 @@ function fallbackCopyText(text, successMessage = "Đã copy") {
         console.error("fallbackCopyText error:", err);
         alert("Copy thất bại");
     }
+}
+
+async function logoutAdmin() {
+    try {
+        await fetch("/api/auth/logout", {
+            method: "POST"
+        });
+    } catch (err) {
+        console.error("logout error:", err);
+    }
+
+    window.location.href = "/login.html";
 }
 
 async function safeJson(res) {

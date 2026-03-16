@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Login</title>
+    <link rel="stylesheet" href="style.css">
+    <style>
+        body{
+            display:flex;
+            align-items:center;
+            justify-content:center;
+            min-height:100vh;
+        }
+        .login-box{
+            width:100%;
+            max-width:420px;
+            background:linear-gradient(180deg, rgba(18, 36, 75, 0.96), rgba(13, 26, 55, 0.96));
+            border:1px solid rgba(103, 153, 255, 0.18);
+            border-radius:22px;
+            padding:28px;
+            box-shadow:0 12px 30px rgba(0,0,0,0.22);
+        }
+        .login-box h1{
+            font-size:28px;
+            margin-bottom:8px;
+            color:#fff;
+        }
+        .login-box p{
+            color:#9fb3d9;
+            margin-bottom:18px;
+        }
+        .login-box .form-row{
+            flex-direction:column;
+            align-items:stretch;
+        }
+        .login-error{
+            margin-top:12px;
+            color:#ff9fb2;
+            min-height:22px;
+        }
+        .login-btn{
+            width:100%;
+        }
+    </style>
+</head>
+<body>
+    <div class="login-box">
+        <h1>Admin Login</h1>
+        <p>Đăng nhập để vào trang quản trị.</p>
+
+        <div class="form-row">
+            <input id="username" type="text" placeholder="Tên đăng nhập">
+            <input id="password" type="password" placeholder="Mật khẩu">
+            <button class="login-btn" onclick="loginAdmin()">Đăng nhập</button>
+        </div>
+
+        <div id="loginError" class="login-error"></div>
+    </div>
+
+    <script>
+        async function loginAdmin() {
+            const username = document.getElementById("username").value.trim();
+            const password = document.getElementById("password").value;
+            const errorEl = document.getElementById("loginError");
+
+            errorEl.textContent = "";
+
+            try {
+                const res = await fetch("/api/auth/login", {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json"
+                    },
+                    body: JSON.stringify({ username, password })
+                });
+
+                const data = await res.json();
+
+                if (!res.ok) {
+                    errorEl.textContent = data.message || "Đăng nhập thất bại";
+                    return;
+                }
+
+                window.location.href = "/";
+            } catch (err) {
+                errorEl.textContent = "Lỗi kết nối server";
+            }
+        }
+    </script>
+</body>
+</html>

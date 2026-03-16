@@ -2,17 +2,33 @@ const express = require("express");
 const path = require("path");
 const mongoose = require("mongoose");
 const cors = require("cors");
+const session = require("express-session");
 
 const Account = require("./models/Account");
 const accountRoutes = require("./routes/accountRoutes");
 const messageRoutes = require("./routes/messageRoutes");
 const workerRoutes = require("./routes/workerRoutes");
+const authRoutes = require("./routes/authRoutes");
+const { requireAdmin } = require("./middleware/auth");
 
 const app = express();
 
 app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+
+app.use(session({
+    secret: process.env.SESSION_SECRET || "wechat_manager_secret_2026",
+    resave: false,
+    saveUninitialized: false,
+    cookie: {
+        httpOnly: true,
+        sameSite: "lax",
+        secure: false,
+        maxAge: 1000 * 60 * 60 * 12
+    }
+}));
+
 app.use(express.static(path.join(__dirname, "public")));
 
 const MONGODB_URI =
@@ -29,23 +45,11 @@ mongoose
         console.error("MongoDB error:", err.message);
     });
 
-app.use("/api/accounts", accountRoutes);
-app.use("/api/messages", messageRoutes);
-app.use("/api/worker", workerRoutes);
+app.use("/api/auth", authRoutes);
 
-app.get("/ping", (req, res) => {
-    res.send("pong");
-});
-
-app.get("/health", (req, res) => {
-    res.json({
-        ok: true,
-        message: "Server is running"
-    });
-});
-
-app.get("/", (req, res) => {
-    res.sendFile(path.join(__dirname, "public", "index.html"));
+// route công khai cho khách
+app.get("/messages.html", (req, res) => {
+    res.sendFile(path.join(__dirname, "public", "messages.html"));
 });
 
 app.get("/m/:token", async (req, res) => {
@@ -69,6 +73,39 @@ app.get("/m/:token", async (req, res) => {
         console.error("route /m/:token error:", error);
         return res.status(500).send("Lỗi hệ thống");
     }
+});
+
+// trang login công khai
+app.get("/login.html", (req, res) => {
+    res.sendFile(path.join(__dirname, "public", "login.html"));
+});
+
+// khóa trang admin
+app.get("/", requireAdmin, (req, res) => {
+    res.sendFile(path.join(__dirname, "public", "index.html"));
+});
+
+app.get("/index.html", requireAdmin, (req, res) => {
+    res.sendFile(path.join(__dirname, "public", "index.html"));
+});
+
+// khóa api admin
+app.use("/api/accounts", requireAdmin, accountRoutes);
+app.use("/api/worker", requireAdmin, workerRoutes);
+
+// api messages cho khách vẫn công khai theo token
+app.use("/api/messages", messageRoutes);
+
+// test route
+app.get("/ping", (req, res) => {
+    res.send("pong");
+});
+
+app.get("/health", (req, res) => {
+    res.json({
+        ok: true,
+        message: "Server is running"
+    });
 });
 
 app.use((req, res) => {
