@@ -31,7 +31,7 @@ app.use(
     })
 );
 
-// rất quan trọng: tắt tự mở index.html
+// Quan trọng: tắt tự mở index.html
 app.use(express.static(path.join(__dirname, "public"), { index: false }));
 
 const MONGODB_URI =
@@ -39,7 +39,6 @@ const MONGODB_URI =
 
 const PORT = process.env.PORT || 3000;
 
-// connect MongoDB
 mongoose
     .connect(MONGODB_URI)
     .then(() => {
@@ -49,39 +48,27 @@ mongoose
         console.error("MongoDB error:", err.message);
     });
 
-// auth api
+// Auth API
 app.use("/api/auth", authRoutes);
 
-// api admin
+// API admin
 app.use("/api/accounts", requireAdmin, accountRoutes);
 app.use("/api/worker", requireAdmin, workerRoutes);
 
-// api công khai cho khách xem tin nhắn theo token
+// API khách
 app.use("/api/messages", messageRoutes);
 
-// route test
-app.get("/ping", (req, res) => {
-    res.send("pong");
-});
-
-app.get("/health", (req, res) => {
-    res.json({
-        ok: true,
-        message: "Server is running"
-    });
-});
-
-// login công khai
+// Trang login công khai
 app.get("/login.html", (req, res) => {
     res.sendFile(path.join(__dirname, "public", "login.html"));
 });
 
-// trang khách công khai
+// Trang tin nhắn khách công khai
 app.get("/messages.html", (req, res) => {
     res.sendFile(path.join(__dirname, "public", "messages.html"));
 });
 
-// link khách hàng
+// Link khách
 app.get("/m/:token", async (req, res) => {
     try {
         const fullLinkToken = "/m/" + String(req.params.token).trim();
@@ -105,21 +92,31 @@ app.get("/m/:token", async (req, res) => {
     }
 });
 
-// admin page
+// Admin page
 app.get("/", requireAdmin, (req, res) => {
     res.sendFile(path.join(__dirname, "public", "index.html"));
 });
+
 app.get("/index.html", requireAdmin, (req, res) => {
     res.sendFile(path.join(__dirname, "public", "index.html"));
 });
 
-// fallback
+// Test route
+app.get("/ping", (req, res) => {
+    res.send("pong");
+});
+
+app.get("/health", (req, res) => {
+    res.json({
+        ok: true,
+        message: "Server is running"
+    });
+});
+
 app.use((req, res) => {
     res.status(404).send("Not Found");
 });
 
-
-// start server
 app.listen(PORT, "0.0.0.0", () => {
     console.log(`Server running on port ${PORT}`);
 });
