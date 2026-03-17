@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WeChat Manager</title>
+    <link rel="stylesheet" href="/style.css">
+    <style>
+        body{
+            display:flex;
+            align-items:center;
+            justify-content:center;
+            min-height:100vh;
+        }
+        .home-box{
+            width:100%;
+            max-width:760px;
+            background:linear-gradient(180deg, rgba(18,36,75,.96), rgba(13,26,55,.96));
+            border:1px solid rgba(103,153,255,.18);
+            border-radius:22px;
+            padding:32px;
+            box-shadow:0 12px 30px rgba(0,0,0,.22);
+        }
+        .home-box h1{
+            color:#fff;
+            margin-bottom:10px;
+        }
+        .home-box p{
+            color:#a8bce2;
+            line-height:1.7;
+        }
+        .home-actions{
+            display:flex;
+            gap:12px;
+            margin-top:22px;
+            flex-wrap:wrap;
+        }
+        .home-btn{
+            display:inline-flex;
+            align-items:center;
+            justify-content:center;
+            min-width:160px;
+            text-decoration:none;
+            border:none;
+            border-radius:14px;
+            padding:12px 18px;
+            font-weight:700;
+            cursor:pointer;
+            background:linear-gradient(135deg, #59e1ff, #72f0c2);
+            color:#08203f;
+        }
+        .home-btn.secondary{
+            background:rgba(255,255,255,.08);
+            color:#dce9ff;
+            border:1px solid rgba(255,255,255,.12);
+        }
+    </style>
+</head>
+<body>
+    <div class="home-box">
+        <h1>WeChat Account Manager</h1>
+        <p>
+            Đây là cổng quản lý tài khoản và hệ thống tin nhắn.
+            Khu vực quản trị được bảo vệ riêng. Nếu bạn là người dùng cuối,
+            hãy dùng link token được cấp riêng cho bạn.
+        </p>
+
+        <div class="home-actions">
+            <a class="home-btn" href="/admin/login">Vào trang quản trị</a>
+            <a class="home-btn secondary" href="/health">Kiểm tra hệ thống</a>
+        </div>
+    </div>
+</body>
+</html>

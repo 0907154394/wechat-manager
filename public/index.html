@@ -3,21 +3,26 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>WeChat Account Manager</title>
-    <link rel="stylesheet" href="style.css">
+    <title>WeChat Account Manager - Admin</title>
+    <link rel="stylesheet" href="/style.css">
 </head>
 <body>
     <div class="page-shell">
         <div class="container">
 
             <header class="page-header">
-                <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:16px;flex-wrap:wrap;">
+                <div class="header-top">
                     <div>
                         <h1>WeChat Account Manager</h1>
-                        <p class="page-subtitle">Quản lý account, token và hộp thư nhắn tin</p>
+                        <p class="page-subtitle">
+                            Quản lý account, token và hộp thư nhắn tin
+                        </p>
                     </div>
-                    <div>
-                        <button type="button" class="delete-btn" onclick="logoutAdmin()">Đăng xuất</button>
+
+                    <div class="header-actions">
+                        <button type="button" class="delete-btn" onclick="logoutAdmin()">
+                            Đăng xuất
+                        </button>
                     </div>
                 </div>
             </header>
@@ -27,10 +32,12 @@
                     <h2 id="total">0</h2>
                     <p>Tất cả</p>
                 </div>
+
                 <div class="box">
                     <h2 id="unsold">0</h2>
                     <p>Chưa bán</p>
                 </div>
+
                 <div class="box">
                     <h2 id="sold">0</h2>
                     <p>Đã bán</p>
@@ -74,10 +81,13 @@
                 <div id="dropZone" class="drop-zone">
                     <p class="drop-title">Kéo & thả file CSV vào đây</p>
                     <p class="drop-or">hoặc</p>
+
                     <input id="excelFileInput" type="file" accept=".csv" hidden>
+
                     <button type="button" onclick="document.getElementById('excelFileInput').click()">
                         Chọn file CSV
                     </button>
+
                     <div id="selectedFileName" class="selected-file-name"></div>
                 </div>
 
@@ -100,7 +110,7 @@
                 </div>
 
                 <p class="import-note">
-                    App sẽ chỉ chèn dấu <b>.</b> vào phần trước <b>@</b>, giữ nguyên domain, và chỉ tạo theo số lượng bạn nhập.
+                    App sẽ chỉ chèn dấu <b>.</b> vào phần trước <b>@</b>, giữ nguyên domain và chỉ tạo theo số lượng bạn nhập.
                 </p>
             </section>
 
@@ -112,12 +122,19 @@
 
                 <div class="toolbar">
                     <div class="form-row filter-row">
-                        <input id="filterDomain" type="text" placeholder="Lọc theo email / wechat / token" oninput="filterAccounts()">
+                        <input
+                            id="filterDomain"
+                            type="text"
+                            placeholder="Lọc theo email / wechat / token"
+                            oninput="filterAccounts()"
+                        >
+
                         <select id="filterStatus" onchange="filterAccounts()">
                             <option value="">Trạng thái</option>
                             <option value="CHUA BAN">Chưa bán</option>
                             <option value="DA BAN">Đã bán</option>
                         </select>
+
                         <button type="button" onclick="exportAccounts()">Export</button>
                     </div>
                 </div>
@@ -126,17 +143,21 @@
                     <table>
                         <thead>
                             <tr>
-                                <th style="width:70px">ID</th>
+                                <th style="width: 70px;">ID</th>
                                 <th>Email</th>
-                                <th style="width:140px">Password</th>
-                                <th style="width:140px">Trạng thái</th>
-                                <th style="width:170px">Acc WeChat</th>
-                                <th style="width:190px">Link token</th>
-                                <th style="width:190px">Token tin nhắn</th>
-                                <th style="width:430px">Thao tác</th>
+                                <th style="width: 140px;">Password</th>
+                                <th style="width: 140px;">Trạng thái</th>
+                                <th style="width: 170px;">Acc WeChat</th>
+                                <th style="width: 220px;">Link token</th>
+                                <th style="width: 220px;">Token tin nhắn</th>
+                                <th style="width: 430px;">Thao tác</th>
                             </tr>
                         </thead>
-                        <tbody id="table"></tbody>
+                        <tbody id="table">
+                            <tr>
+                                <td colspan="8" class="empty-row">Đang tải dữ liệu...</td>
+                            </tr>
+                        </tbody>
                     </table>
                 </div>
             </section>
@@ -144,6 +165,6 @@
         </div>
     </div>
 
-    <script src="script.js?v=304"></script>
+    <script src="/script.js?v=security304"></script>
 </body>
 </html>

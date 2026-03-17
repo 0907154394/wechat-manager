@@ -11,15 +11,18 @@ window.onload = async () => {
 
 async function checkAdminSession() {
     try {
-        const res = await fetch("/api/auth/me");
+        const res = await fetch("/api/auth/me", {
+            headers: { Accept: "application/json" }
+        });
+
         const data = await safeJson(res);
 
         if (!res.ok || !data.isAdmin) {
-            window.location.href = "/login.html";
+            window.location.href = "/admin/login";
         }
     } catch (err) {
         console.error("checkAdminSession error:", err);
-        window.location.href = "/login.html";
+        window.location.href = "/admin/login";
     }
 }
 
@@ -73,14 +76,14 @@ async function loadAccounts() {
     try {
         const res = await fetch("/api/accounts", {
             headers: {
-                "Accept": "application/json"
+                Accept: "application/json"
             }
         });
 
         const data = await safeJson(res);
 
         if (res.status === 401) {
-            window.location.href = "/login.html";
+            window.location.href = "/admin/login";
             return;
         }
 
@@ -128,7 +131,7 @@ async function createAccounts() {
             method: "POST",
             headers: {
                 "Content-Type": "application/json",
-                "Accept": "application/json"
+                Accept: "application/json"
             },
             body: JSON.stringify({
                 baseEmail,
@@ -140,7 +143,7 @@ async function createAccounts() {
         const data = await safeJson(res);
 
         if (res.status === 401) {
-            window.location.href = "/login.html";
+            window.location.href = "/admin/login";
             return;
         }
 
@@ -265,15 +268,15 @@ function updateStats(data) {
     const unsoldEl = document.getElementById("unsold");
 
     if (totalEl) totalEl.innerText = data.length;
-    if (soldEl) soldEl.innerText = data.filter(a => a.status === "DA BAN").length;
-    if (unsoldEl) unsoldEl.innerText = data.filter(a => a.status !== "DA BAN").length;
+    if (soldEl) soldEl.innerText = data.filter((a) => a.status === "DA BAN").length;
+    if (unsoldEl) unsoldEl.innerText = data.filter((a) => a.status !== "DA BAN").length;
 }
 
 function filterAccounts() {
     const keyword = document.getElementById("filterDomain")?.value.trim().toLowerCase() || "";
     const status = document.getElementById("filterStatus")?.value || "";
 
-    filteredAccounts = allAccounts.filter(account => {
+    filteredAccounts = allAccounts.filter((account) => {
         const email = String(account.email || "").toLowerCase();
         const wechatId = String(account.wechatId || "").toLowerCase();
         const linkToken = String(account.linkToken || "").toLowerCase();
@@ -298,13 +301,13 @@ async function sell(id) {
     try {
         const res = await fetch("/api/accounts/sell/" + id, {
             method: "PUT",
-            headers: { "Accept": "application/json" }
+            headers: { Accept: "application/json" }
         });
 
         const data = await safeJson(res);
 
         if (res.status === 401) {
-            window.location.href = "/login.html";
+            window.location.href = "/admin/login";
             return;
         }
 
@@ -324,13 +327,13 @@ async function unsell(id) {
     try {
         const res = await fetch("/api/accounts/unsell/" + id, {
             method: "PUT",
-            headers: { "Accept": "application/json" }
+            headers: { Accept: "application/json" }
         });
 
         const data = await safeJson(res);
 
         if (res.status === 401) {
-            window.location.href = "/login.html";
+            window.location.href = "/admin/login";
             return;
         }
 
@@ -347,7 +350,7 @@ async function unsell(id) {
 }
 
 async function updateWechatId(id) {
-    const current = allAccounts.find(a => a._id === id);
+    const current = allAccounts.find((a) => a._id === id);
     const oldWechatId = current?.wechatId || "";
     const wechatId = prompt("Nhập WeChat ID", oldWechatId);
 
@@ -358,7 +361,7 @@ async function updateWechatId(id) {
             method: "PUT",
             headers: {
                 "Content-Type": "application/json",
-                "Accept": "application/json"
+                Accept: "application/json"
             },
             body: JSON.stringify({
                 wechatId: wechatId.trim()
@@ -368,7 +371,7 @@ async function updateWechatId(id) {
         const data = await safeJson(res);
 
         if (res.status === 401) {
-            window.location.href = "/login.html";
+            window.location.href = "/admin/login";
             return;
         }
 
@@ -388,13 +391,13 @@ async function changeLink(id) {
     try {
         const res = await fetch("/api/accounts/change-link/" + id, {
             method: "PUT",
-            headers: { "Accept": "application/json" }
+            headers: { Accept: "application/json" }
         });
 
         const data = await safeJson(res);
 
         if (res.status === 401) {
-            window.location.href = "/login.html";
+            window.location.href = "/admin/login";
             return;
         }
 
@@ -435,13 +438,13 @@ async function deleteAccount(id) {
     try {
         const res = await fetch("/api/accounts/" + id, {
             method: "DELETE",
-            headers: { "Accept": "application/json" }
+            headers: { Accept: "application/json" }
         });
 
         const data = await safeJson(res);
 
         if (res.status === 401) {
-            window.location.href = "/login.html";
+            window.location.href = "/admin/login";
             return;
         }
 
@@ -466,7 +469,7 @@ function exportAccounts() {
 
     let content = "Email,Password,TrangThai,WeChatID,LinkToken,MessageToken\n";
 
-    filteredAccounts.forEach(a => {
+    filteredAccounts.forEach((a) => {
         content += `"${csvSafe(a.email)}","${csvSafe(a.password)}","${csvSafe(a.status)}","${csvSafe(a.wechatId)}","${csvSafe(a.linkToken)}","${csvSafe(a.messageToken)}"\n`;
     });
 
@@ -485,13 +488,13 @@ function exportAccounts() {
 async function loadWorkerStatus() {
     try {
         const res = await fetch("/api/worker/status", {
-            headers: { "Accept": "application/json" }
+            headers: { Accept: "application/json" }
         });
 
         const data = await safeJson(res);
 
         if (res.status === 401) {
-            window.location.href = "/login.html";
+            window.location.href = "/admin/login";
             return;
         }
 
@@ -526,13 +529,13 @@ async function startWorker() {
     try {
         const res = await fetch("/api/worker/start", {
             method: "POST",
-            headers: { "Accept": "application/json" }
+            headers: { Accept: "application/json" }
         });
 
         const data = await safeJson(res);
 
         if (res.status === 401) {
-            window.location.href = "/login.html";
+            window.location.href = "/admin/login";
             return;
         }
 
@@ -553,13 +556,13 @@ async function stopWorker() {
     try {
         const res = await fetch("/api/worker/stop", {
             method: "POST",
-            headers: { "Accept": "application/json" }
+            headers: { Accept: "application/json" }
         });
 
         const data = await safeJson(res);
 
         if (res.status === 401) {
-            window.location.href = "/login.html";
+            window.location.href = "/admin/login";
             return;
         }
 
@@ -580,13 +583,13 @@ async function reloadWorker() {
     try {
         const res = await fetch("/api/worker/reload", {
             method: "POST",
-            headers: { "Accept": "application/json" }
+            headers: { Accept: "application/json" }
         });
 
         const data = await safeJson(res);
 
         if (res.status === 401) {
-            window.location.href = "/login.html";
+            window.location.href = "/admin/login";
             return;
         }
 
@@ -616,13 +619,13 @@ async function uploadExcelFile() {
         const res = await fetch("/api/accounts/import-mail-file", {
             method: "POST",
             body: formData,
-            headers: { "Accept": "application/json" }
+            headers: { Accept: "application/json" }
         });
 
         const data = await safeJson(res);
 
         if (res.status === 401) {
-            window.location.href = "/login.html";
+            window.location.href = "/admin/login";
             return;
         }
 
@@ -631,7 +634,9 @@ async function uploadExcelFile() {
             return;
         }
 
-        alert(`Import file thành công. Created: ${data.created}, Updated: ${data.updated}, Skipped: ${data.skipped}`);
+        alert(
+            `Import file thành công. Created: ${data.created}, Updated: ${data.updated}, Skipped: ${data.skipped}`
+        );
 
         selectedExcelFile = null;
         const fileInput = document.getElementById("excelFileInput");
@@ -692,13 +697,14 @@ function fallbackCopyText(text, successMessage = "Đã copy") {
 async function logoutAdmin() {
     try {
         await fetch("/api/auth/logout", {
-            method: "POST"
+            method: "POST",
+            headers: { Accept: "application/json" }
         });
     } catch (err) {
         console.error("logout error:", err);
     }
 
-    window.location.href = "/login.html";
+    window.location.href = "/admin/login";
 }
 
 async function safeJson(res) {
