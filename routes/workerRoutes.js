@@ -1,49 +1,81 @@
 const express = require("express");
 const router = express.Router();
 
-const {
-    startWorker,
-    stopWorker,
-    reloadAccounts,
-    getStatus
-} = require("../imapWorker");
+const worker = require("../imapWorker");
 
-router.get("/status", async (req, res) => {
+// GET /api/worker/status
+router.get("/status", (req, res) => {
     try {
-        res.json(getStatus());
-    } catch (error) {
-        console.error("worker status error:", error);
-        res.status(500).json({ message: error.message || "Worker status error" });
+        const status = worker.getStatus();
+
+        return res.json({
+            running: Boolean(status.running),
+            intervalMs: Number(status.intervalMs || 0),
+            activeAccounts: Number(status.activeAccounts || 0),
+            lastRunAt: status.lastRunAt || null,
+            lastError: status.lastError || ""
+        });
+    } catch (err) {
+        console.error("worker status error:", err);
+        return res.status(500).json({
+            success: false,
+            message: err.message || "Worker status error"
+        });
     }
 });
 
-router.post("/start", async (req, res) => {
+// POST /api/worker/start
+router.post("/start", (req, res) => {
     try {
-        const data = startWorker();
-        res.json({ message: "Worker started", ...data });
-    } catch (error) {
-        console.error("worker start error:", error);
-        res.status(500).json({ message: error.message || "Worker start error" });
+        worker.startWorker();
+
+        return res.json({
+            success: true,
+            message: "Worker started"
+        });
+    } catch (err) {
+        console.error("worker start error:", err);
+        return res.status(500).json({
+            success: false,
+            message: err.message || "Worker start error"
+        });
     }
 });
 
-router.post("/stop", async (req, res) => {
+// POST /api/worker/stop
+router.post("/stop", (req, res) => {
     try {
-        const data = stopWorker();
-        res.json({ message: "Worker stopped", ...data });
-    } catch (error) {
-        console.error("worker stop error:", error);
-        res.status(500).json({ message: error.message || "Worker stop error" });
+        worker.stopWorker();
+
+        return res.json({
+            success: true,
+            message: "Worker stopped"
+        });
+    } catch (err) {
+        console.error("worker stop error:", err);
+        return res.status(500).json({
+            success: false,
+            message: err.message || "Worker stop error"
+        });
     }
 });
 
+// POST /api/worker/reload
 router.post("/reload", async (req, res) => {
     try {
-        const data = await reloadAccounts();
-        res.json({ message: "Reloaded", ...data });
-    } catch (error) {
-        console.error("worker reload error:", error);
-        res.status(500).json({ message: error.message || "Worker reload error" });
+        const data = await worker.reloadAccounts();
+
+        return res.json({
+            success: true,
+            message: "Reloaded accounts",
+            activeAccounts: Number(data.activeAccounts || 0)
+        });
+    } catch (err) {
+        console.error("worker reload error:", err);
+        return res.status(500).json({
+            success: false,
+            message: err.message || "Worker reload error"
+        });
     }
 });
 
