@@ -6,17 +6,8 @@ function extractCode(text) {
     const input = cleanText(text);
     if (!input) return "";
 
-    const keywordRegex =
-        /(code|otp|verification|verify|security|login|confirm|password)/i;
-
     const candidates = input.match(/\b\d{4,8}\b/g) || [];
-    if (!candidates.length) return "";
-
-    if (keywordRegex.test(input)) {
-        return candidates[0];
-    }
-
-    return candidates[0];
+    return candidates.length ? candidates[0] : "";
 }
 
 function buildMessagePayload(parsedMail) {

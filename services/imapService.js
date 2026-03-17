@@ -1,4 +1,5 @@
 const { ImapFlow } = require("imapflow");
+const { simpleParser } = require("mailparser");
 
 async function fetchNewEmails(account) {
     const client = new ImapFlow({
@@ -23,30 +24,27 @@ async function fetchNewEmails(account) {
 
         for await (const msg of client.fetch(range, {
             uid: true,
-            envelope: true,
             source: true,
-            internalDate: true,
-            bodyStructure: true
+            internalDate: true
         })) {
-            const parsed = {
-                uid: msg.uid,
-                date: msg.internalDate || null,
-                subject: msg.envelope?.subject || "",
-                from: {
-                    name: msg.envelope?.from?.[0]?.name || "",
-                    address: msg.envelope?.from?.[0]?.address || ""
-                },
-                text: ""
-            };
+            let parsed;
 
             try {
-                const sourceText = msg.source ? msg.source.toString("utf8") : "";
-                parsed.text = sourceText;
+                parsed = await simpleParser(msg.source);
             } catch {
-                parsed.text = "";
+                parsed = {
+                    subject: "",
+                    text: "",
+                    html: "",
+                    from: { text: "" }
+                };
             }
 
-            results.push(parsed);
+            results.push({
+                uid: msg.uid,
+                date: msg.internalDate || null,
+                parsed
+            });
         }
 
         await client.logout();

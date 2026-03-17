@@ -92,9 +92,12 @@ async function tick() {
 }
 
 function startWorker() {
-    if (state.running) return state;
+    if (state.running) {
+        return getStatus();
+    }
 
     state.running = true;
+
     state.timer = setInterval(() => {
         tick().catch((err) => {
             console.error("worker interval error:", err.message);
