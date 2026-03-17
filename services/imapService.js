@@ -16,8 +16,18 @@ async function fetchNewEmails(account) {
     const results = [];
 
     try {
+        console.log("Connecting IMAP:", {
+            host: account.imapHost,
+            port: account.imapPort,
+            secure: account.imapSecure,
+            user: account.imapUser || account.email
+        });
+
         await client.connect();
+        console.log("IMAP connected:", account.email);
+
         await client.mailboxOpen("INBOX");
+        console.log("INBOX opened:", account.email);
 
         const lastUid = Number(account.lastUid || 0);
         const range = `${lastUid + 1}:*`;
@@ -47,12 +57,22 @@ async function fetchNewEmails(account) {
             });
         }
 
+        console.log("Fetched mails count:", results.length);
+
         await client.logout();
+        console.log("IMAP logout:", account.email);
+
         return results;
     } catch (error) {
+        console.error("IMAP REAL ERROR:", error);
+        console.error("IMAP REAL ERROR MESSAGE:", error?.message);
+        console.error("IMAP REAL ERROR RESPONSE:", error?.response);
+        console.error("IMAP REAL ERROR STACK:", error?.stack);
+
         try {
             await client.logout();
         } catch {}
+
         throw error;
     }
 }

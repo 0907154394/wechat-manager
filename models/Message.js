@@ -8,12 +8,30 @@ const messageSchema = new mongoose.Schema(
             required: true,
             index: true
         },
-        sender: { type: String, default: "" },
-        subject: { type: String, default: "" },
-        content: { type: String, default: "" },
-        code: { type: String, default: "" },
-        uid: { type: Number, required: true },
-        rawDate: { type: Date, default: null }
+        sender: {
+            type: String,
+            default: ""
+        },
+        subject: {
+            type: String,
+            default: ""
+        },
+        content: {
+            type: String,
+            default: ""
+        },
+        code: {
+            type: String,
+            default: ""
+        },
+        uid: {
+            type: Number,
+            required: true
+        },
+        rawDate: {
+            type: Date,
+            default: null
+        }
     },
     { timestamps: true }
 );
@@ -21,4 +39,4 @@ const messageSchema = new mongoose.Schema(
 messageSchema.index({ accountId: 1, uid: 1 }, { unique: true });
 
 module.exports =
-    mongoose.models.Message || mongoose.model("Message", messageSchema);
+    mongoose.models.Message || mongoose.model("Message", messageSchema); 

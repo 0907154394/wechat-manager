@@ -1,180 +1,126 @@
 <!DOCTYPE html>
 <html lang="vi">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Hộp thư tin nhắn</title>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Messages</title>
     <style>
-        *{box-sizing:border-box}
-        body{
-            margin:0;
-            font-family:Arial,sans-serif;
-            background:#0b1730;
-            color:#fff;
+        body {
+            margin: 0;
+            font-family: Arial, sans-serif;
+            background: #0b1220;
+            color: #fff;
+            padding: 20px;
         }
-        .container{
-            width:min(1000px,96%);
-            margin:30px auto;
+
+        h1 {
+            margin-bottom: 20px;
         }
-        .card{
-            background:#14274a;
-            border-radius:16px;
-            padding:20px;
-            margin-bottom:20px;
-            box-shadow:0 10px 24px rgba(0,0,0,0.28);
+
+        .toolbar {
+            display: flex;
+            gap: 12px;
+            margin-bottom: 20px;
         }
-        .message{
-            background:#10213f;
-            border-radius:12px;
-            padding:14px;
-            margin-bottom:12px;
+
+        button {
+            border: none;
+            padding: 10px 16px;
+            border-radius: 10px;
+            cursor: pointer;
+            background: #2b7fff;
+            color: white;
+            font-weight: bold;
         }
-        .sender{
-            color:#67e8f9;
-            font-weight:bold;
-            margin-bottom:8px;
+
+        .list {
+            display: grid;
+            gap: 16px;
         }
-        .time{
-            color:#94a3b8;
-            font-size:12px;
-            margin-top:8px;
+
+        .card {
+            background: #111a2e;
+            border: 1px solid #22304f;
+            border-radius: 14px;
+            padding: 16px;
         }
-        textarea,input{
-            width:100%;
-            box-sizing:border-box;
-            padding:12px;
-            border-radius:10px;
-            border:none;
-            margin-bottom:10px;
-            background:#123a70;
-            color:#fff;
+
+        .subject {
+            font-size: 18px;
+            font-weight: bold;
+            margin-bottom: 8px;
         }
-        button{
-            padding:10px 16px;
-            border:none;
-            border-radius:10px;
-            background:#2563eb;
-            color:#fff;
-            cursor:pointer;
-            font-weight:700;
+
+        .meta {
+            font-size: 13px;
+            color: #9fb3d9;
+            margin-bottom: 10px;
         }
-        h1,h2{
-            margin-top:0;
+
+        .code {
+            display: inline-block;
+            font-size: 24px;
+            font-weight: bold;
+            color: #7fffd4;
+            margin: 8px 0;
+        }
+
+        .content {
+            white-space: pre-wrap;
+            line-height: 1.5;
+            color: #dfe8ff;
         }
     </style>
 </head>
 <body>
-    <div class="container">
-        <div class="card">
-            <h1>Hộp thư tin nhắn</h1>
-            <div id="accountInfo">Đang tải...</div>
-        </div>
+    <h1>Danh sách tin nhắn</h1>
 
-        <div class="card">
-            <h2>Thêm tin nhắn test</h2>
-            <input id="sender" placeholder="Người gửi">
-            <input id="subject" placeholder="Tiêu đề">
-            <textarea id="content" rows="4" placeholder="Nội dung tin nhắn"></textarea>
-            <button onclick="addMessage()">Gửi tin nhắn test</button>
-        </div>
-
-        <div class="card">
-            <h2>Danh sách tin nhắn</h2>
-            <div id="messageList"></div>
-        </div>
+    <div class="toolbar">
+        <button onclick="loadMessages()">Tải lại</button>
     </div>
 
+    <div id="list" class="list"></div>
+
     <script>
-        let currentToken = "";
-        let currentEmail = "";
-
-        window.onload = function () {
-            const params = new URLSearchParams(window.location.search);
-            currentToken = params.get("token") || "";
-            if (!currentToken) {
-                document.getElementById("accountInfo").innerText = "Thiếu token";
-                return;
-            }
-            loadMessages();
-        };
-
         async function loadMessages() {
-            const res = await fetch("/api/messages/" + encodeURIComponent(currentToken));
-            const data = await res.json();
+            const list = document.getElementById("list");
+            list.innerHTML = "Đang tải...";
 
-            if (!res.ok) {
-                document.getElementById("accountInfo").innerText = data.message || "Không tải được dữ liệu";
-                return;
-            }
+            try {
+                const res = await fetch("/api/messages");
+                const data = await res.json();
 
-            currentEmail = data.account.email;
+                if (!Array.isArray(data) || data.length === 0) {
+                    list.innerHTML = "<div class='card'>Chưa có tin nhắn nào.</div>";
+                    return;
+                }
 
-            document.getElementById("accountInfo").innerHTML = `
-                Email: <b>${escapeHtml(data.account.email)}</b><br>
-                WeChat ID: <b>${escapeHtml(data.account.wechatId || "-")}</b><br>
-                Trạng thái: <b>${escapeHtml(data.account.status)}</b><br>
-                Token: <b>${escapeHtml(data.account.messageToken)}</b>
-            `;
-
-            let html = "";
-            data.messages.forEach(msg => {
-                html += `
-                    <div class="message">
-                        <div class="sender">${escapeHtml(msg.sender)}</div>
-                        <div><b>${escapeHtml(msg.subject || "(Không có tiêu đề)")}</b></div>
-                        <div>${escapeHtml(msg.content)}</div>
-                        <div class="time">${new Date(msg.createdAt).toLocaleString()}</div>
+                list.innerHTML = data.map(item => `
+                    <div class="card">
+                        <div class="subject">${escapeHtml(item.subject || "(Không có tiêu đề)")}</div>
+                        <div class="meta">
+                            Từ: ${escapeHtml(item.sender || "Unknown")} <br>
+                            Lúc: ${item.createdAt ? new Date(item.createdAt).toLocaleString() : ""}
+                        </div>
+                        <div class="code">${escapeHtml(item.code || "")}</div>
+                        <div class="content">${escapeHtml(item.content || "")}</div>
                     </div>
-                `;
-            });
-
-            document.getElementById("messageList").innerHTML = html || "Chưa có tin nhắn nào.";
-        }
-
-        async function addMessage() {
-            const sender = document.getElementById("sender").value.trim();
-            const subject = document.getElementById("subject").value.trim();
-            const content = document.getElementById("content").value.trim();
-
-            if (!currentEmail || !content) {
-                alert("Thiếu dữ liệu");
-                return;
+                `).join("");
+            } catch (err) {
+                list.innerHTML = `<div class="card">Lỗi tải dữ liệu: ${escapeHtml(err.message)}</div>`;
             }
-
-            const res = await fetch("/api/messages/add-test", {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/json"
-                },
-                body: JSON.stringify({
-                    email: currentEmail,
-                    sender: sender || "System",
-                    subject,
-                    content
-                })
-            });
-
-            const data = await res.json();
-
-            if (!res.ok) {
-                alert(data.message || "Lỗi");
-                return;
-            }
-
-            document.getElementById("sender").value = "";
-            document.getElementById("subject").value = "";
-            document.getElementById("content").value = "";
-            loadMessages();
         }
 
         function escapeHtml(value) {
-            return String(value)
+            return String(value || "")
                 .replaceAll("&", "&amp;")
                 .replaceAll("<", "&lt;")
                 .replaceAll(">", "&gt;")
                 .replaceAll('"', "&quot;")
                 .replaceAll("'", "&#039;");
         }
+
+        loadMessages();
     </script>
 </body>
 </html>

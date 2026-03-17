@@ -53,7 +53,7 @@ const accountSchema = new mongoose.Schema(
         },
         provider: {
             type: String,
-            default: "custom",
+            default: "gmail",
             trim: true
         },
 
@@ -77,9 +77,6 @@ const accountSchema = new mongoose.Schema(
     },
     { timestamps: true }
 );
-
-accountSchema.index({ email: 1 }, { unique: true });
-accountSchema.index({ imapEnabled: 1, workerStatus: 1 });
 
 module.exports =
     mongoose.models.Account || mongoose.model("Account", accountSchema);

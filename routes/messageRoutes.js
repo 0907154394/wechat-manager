@@ -2,20 +2,20 @@ const express = require("express");
 const router = express.Router();
 const Message = require("../models/Message");
 
+// GET /api/messages
 router.get("/", async (req, res) => {
     try {
-        const accountId = String(req.query.accountId || "").trim();
-
-        const query = accountId ? { accountId } : {};
-
-        const messages = await Message.find(query)
+        const messages = await Message.find({})
             .sort({ createdAt: -1 })
             .limit(100);
 
-        res.json(messages);
+        return res.json(messages);
     } catch (error) {
         console.error("get messages error:", error);
-        res.status(500).json({ message: error.message });
+        return res.status(500).json({
+            success: false,
+            message: error.message || "Get messages failed"
+        });
     }
 });
 
