@@ -5,38 +5,41 @@ const {
     startWorker,
     stopWorker,
     reloadAccounts,
-    getWorkerStatus
+    getStatus
 } = require("../imapWorker");
 
-router.get("/status", (req, res) => {
-    res.json(getWorkerStatus());
+router.get("/status", async (req, res) => {
+    try {
+        res.json(getStatus());
+    } catch (error) {
+        res.status(500).json({ message: error.message });
+    }
 });
 
-router.post("/start", (req, res) => {
-    const state = startWorker();
-    res.json({
-        message: "Worker started",
-        state
-    });
+router.post("/start", async (req, res) => {
+    try {
+        const data = startWorker();
+        res.json({ message: "Worker started", ...data });
+    } catch (error) {
+        res.status(500).json({ message: error.message });
+    }
 });
 
-router.post("/stop", (req, res) => {
-    const state = stopWorker();
-    res.json({
-        message: "Worker stopped",
-        state
-    });
+router.post("/stop", async (req, res) => {
+    try {
+        const data = stopWorker();
+        res.json({ message: "Worker stopped", ...data });
+    } catch (error) {
+        res.status(500).json({ message: error.message });
+    }
 });
 
 router.post("/reload", async (req, res) => {
     try {
-        const state = await reloadAccounts();
-        res.json({
-            message: "Reload accounts success",
-            state
-        });
-    } catch (err) {
-        res.status(500).json({ message: err.message });
+        const data = await reloadAccounts();
+        res.json({ message: "Reloaded", ...data });
+    } catch (error) {
+        res.status(500).json({ message: error.message });
     }
 });
 

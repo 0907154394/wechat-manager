@@ -1,139 +1,143 @@
-const { ImapFlow } = require("imapflow");
 const Account = require("./models/Account");
 const Message = require("./models/Message");
+const { fetchNewEmails } = require("./services/imapService");
+const { buildMessagePayload } = require("./services/parserService");
 
-let workerState = {
+const state = {
     running: false,
-    lastRunAt: null,
+    intervalMs: 10000,
+    timer: null,
     activeAccounts: 0,
-    intervalId: null,
+    lastRunAt: null,
     lastError: ""
 };
 
-async function syncOneAccount(account) {
-    const client = new ImapFlow({
-        host: account.imapHost,
-        port: account.imapPort || 993,
-        secure: account.imapSecure !== false,
-        auth: {
-            user: account.imapUser,
-            pass: account.imapPass
-        }
-    });
+async function processAccount(account) {
+    account.workerStatus = "checking";
+    account.workerLastError = "";
+    await account.save();
 
     try {
-        await client.connect();
-        await client.mailboxOpen("INBOX");
+        const mails = await fetchNewEmails(account);
 
-        const lock = await client.getMailboxLock("INBOX");
+        let maxUid = Number(account.lastUid || 0);
 
-        try {
-            const messages = await client.fetchAll("1:*", {
-                uid: true,
-                envelope: true,
-                source: true
-            });
+        for (const mail of mails) {
+            const payload = buildMessagePayload(mail);
 
-            const lastMessages = messages.slice(-20);
-
-            for (const msg of lastMessages) {
-                const subject = msg.envelope?.subject || "";
-                const sender = msg.envelope?.from?.[0]?.address || "IMAP";
-                const content = msg.source
-                    ? msg.source.toString("utf8").slice(0, 5000)
-                    : "";
-
-                const existed = await Message.findOne({
+            await Message.updateOne(
+                {
                     accountId: account._id,
-                    subject,
-                    sender,
-                    content
-                });
-
-                if (!existed && content.trim()) {
-                    await Message.create({
+                    uid: mail.uid
+                },
+                {
+                    $setOnInsert: {
                         accountId: account._id,
-                        sender,
-                        subject,
-                        content
-                    });
-                }
-            }
-        } finally {
-            lock.release();
+                        messageToken: account.messageToken || "",
+                        sender: payload.sender,
+                        subject: payload.subject,
+                        content: payload.content,
+                        code: payload.code,
+                        uid: mail.uid,
+                        rawDate: mail.date || null
+                    }
+                },
+                { upsert: true }
+            );
+
+            if (mail.uid > maxUid) maxUid = mail.uid;
         }
-    } finally {
-        await client.logout().catch(() => {});
+
+        account.lastUid = maxUid;
+        account.lastCheckedAt = new Date();
+        account.workerStatus = "connected";
+        account.workerLastError = "";
+        await account.save();
+    } catch (error) {
+        account.workerStatus = "error";
+        account.workerLastError = String(error.message || error);
+        account.lastCheckedAt = new Date();
+        await account.save();
+        throw error;
     }
 }
 
-async function runWorkerOnce() {
-    const accounts = await Account.find({
-        imapEnabled: true,
-        imapHost: { $ne: "" },
-        imapUser: { $ne: "" },
-        imapPass: { $ne: "" }
-    });
+async function tick() {
+    if (!state.running) return;
 
-    workerState.activeAccounts = accounts.length;
-    workerState.lastRunAt = new Date().toISOString();
-    workerState.lastError = "";
+    state.lastRunAt = new Date().toISOString();
+    state.lastError = "";
 
-    for (const account of accounts) {
-        try {
-            await syncOneAccount(account);
-        } catch (err) {
-            workerState.lastError = err.message;
-            console.error("IMAP sync error:", account.email, err.message);
+    try {
+        const accounts = await Account.find({
+            imapEnabled: true,
+            imapHost: { $ne: "" },
+            imapPass: { $ne: "" }
+        });
+
+        state.activeAccounts = accounts.length;
+
+        for (const account of accounts) {
+            try {
+                await processAccount(account);
+            } catch (error) {
+                state.lastError = String(error.message || error);
+                console.error("IMAP worker account error:", account.email, error.message);
+            }
         }
+    } catch (error) {
+        state.lastError = String(error.message || error);
+        console.error("IMAP worker tick error:", error.message);
     }
 }
 
 function startWorker() {
-    if (workerState.running) return workerState;
+    if (state.running) return state;
 
-    workerState.running = true;
-    workerState.lastError = "";
+    state.running = true;
+    state.timer = setInterval(() => {
+        tick().catch((err) => {
+            console.error("IMAP worker interval error:", err.message);
+        });
+    }, state.intervalMs);
 
-    workerState.intervalId = setInterval(async () => {
-        try {
-            await runWorkerOnce();
-        } catch (err) {
-            workerState.lastError = err.message;
-            console.error("Worker loop error:", err.message);
-        }
-    }, 30000);
-
-    runWorkerOnce().catch(err => {
-        workerState.lastError = err.message;
-        console.error("Initial worker run error:", err.message);
+    tick().catch((err) => {
+        console.error("IMAP worker start tick error:", err.message);
     });
 
-    return workerState;
+    return state;
 }
 
 function stopWorker() {
-    if (workerState.intervalId) {
-        clearInterval(workerState.intervalId);
-        workerState.intervalId = null;
+    if (state.timer) {
+        clearInterval(state.timer);
+        state.timer = null;
     }
 
-    workerState.running = false;
-    return workerState;
+    state.running = false;
+    return state;
 }
 
 async function reloadAccounts() {
-    await runWorkerOnce();
-    return workerState;
+    return {
+        ok: true,
+        activeAccounts: await Account.countDocuments({ imapEnabled: true })
+    };
 }
 
-function getWorkerStatus() {
-    return workerState;
+function getStatus() {
+    return {
+        running: state.running,
+        intervalMs: state.intervalMs,
+        activeAccounts: state.activeAccounts,
+        lastRunAt: state.lastRunAt,
+        lastError: state.lastError
+    };
 }
 
 module.exports = {
     startWorker,
     stopWorker,
     reloadAccounts,
-    getWorkerStatus
+    getStatus
 };

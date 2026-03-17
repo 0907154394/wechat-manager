@@ -1,28 +1,24 @@
 const mongoose = require("mongoose");
 
-const MessageSchema = new mongoose.Schema({
-    accountId: {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: "Account",
-        required: true
+const messageSchema = new mongoose.Schema(
+    {
+        accountId: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: "Account",
+            required: true,
+            index: true
+        },
+        messageToken: { type: String, default: "", index: true },
+        sender: { type: String, default: "" },
+        subject: { type: String, default: "" },
+        content: { type: String, default: "" },
+        code: { type: String, default: "" },
+        uid: { type: Number, required: true },
+        rawDate: { type: Date, default: null }
     },
-    sender: {
-        type: String,
-        default: "System",
-        trim: true
-    },
-    subject: {
-        type: String,
-        default: "",
-        trim: true
-    },
-    content: {
-        type: String,
-        required: true,
-        trim: true
-    }
-}, {
-    timestamps: true
-});
+    { timestamps: true }
+);
 
-module.exports = mongoose.model("Message", MessageSchema);
+messageSchema.index({ accountId: 1, uid: 1 }, { unique: true });
+
+module.exports = mongoose.models.Message || mongoose.model("Message", messageSchema);
