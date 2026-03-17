@@ -5,8 +5,8 @@ const { buildMessagePayload } = require("./services/parserService");
 
 const state = {
     running: false,
-    intervalMs: 10000,
     timer: null,
+    intervalMs: 10000,
     activeAccounts: 0,
     lastRunAt: null,
     lastError: ""
@@ -19,11 +19,10 @@ async function processAccount(account) {
 
     try {
         const mails = await fetchNewEmails(account);
-
         let maxUid = Number(account.lastUid || 0);
 
         for (const mail of mails) {
-            const payload = buildMessagePayload(mail);
+            const payload = buildMessagePayload(mail.parsed);
 
             await Message.updateOne(
                 {
@@ -33,7 +32,6 @@ async function processAccount(account) {
                 {
                     $setOnInsert: {
                         accountId: account._id,
-                        messageToken: account.messageToken || "",
                         sender: payload.sender,
                         subject: payload.subject,
                         content: payload.content,
@@ -45,7 +43,9 @@ async function processAccount(account) {
                 { upsert: true }
             );
 
-            if (mail.uid > maxUid) maxUid = mail.uid;
+            if (mail.uid > maxUid) {
+                maxUid = mail.uid;
+            }
         }
 
         account.lastUid = maxUid;
@@ -97,15 +97,15 @@ function startWorker() {
     state.running = true;
     state.timer = setInterval(() => {
         tick().catch((err) => {
-            console.error("IMAP worker interval error:", err.message);
+            console.error("worker interval error:", err.message);
         });
     }, state.intervalMs);
 
     tick().catch((err) => {
-        console.error("IMAP worker start tick error:", err.message);
+        console.error("worker start tick error:", err.message);
     });
 
-    return state;
+    return getStatus();
 }
 
 function stopWorker() {
@@ -115,13 +115,16 @@ function stopWorker() {
     }
 
     state.running = false;
-    return state;
+    return getStatus();
 }
 
 async function reloadAccounts() {
+    const total = await Account.countDocuments({ imapEnabled: true });
+    state.activeAccounts = total;
+
     return {
         ok: true,
-        activeAccounts: await Account.countDocuments({ imapEnabled: true })
+        activeAccounts: total
     };
 }
 

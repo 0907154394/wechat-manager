@@ -4,14 +4,12 @@ function cleanText(value) {
 
 function extractCode(text) {
     const input = cleanText(text);
-
     if (!input) return "";
 
     const keywordRegex =
-        /(code|otp|verification|verify|security|login|wechat|telegram|discord|facebook|google)/i;
+        /(code|otp|verification|verify|security|login|confirm|password)/i;
 
     const candidates = input.match(/\b\d{4,8}\b/g) || [];
-
     if (!candidates.length) return "";
 
     if (keywordRegex.test(input)) {
@@ -21,14 +19,14 @@ function extractCode(text) {
     return candidates[0];
 }
 
-function buildMessagePayload(mail) {
+function buildMessagePayload(parsedMail) {
     const sender =
-        cleanText(mail.from?.name) ||
-        cleanText(mail.from?.address) ||
+        cleanText(parsedMail.from?.text) ||
+        cleanText(parsedMail.from?.value?.[0]?.address) ||
         "Unknown";
 
-    const subject = cleanText(mail.subject || "");
-    const content = cleanText(mail.text || mail.html || "");
+    const subject = cleanText(parsedMail.subject || "");
+    const content = cleanText(parsedMail.text || parsedMail.html || "");
     const code = extractCode(`${subject} ${content}`);
 
     return {
@@ -40,6 +38,7 @@ function buildMessagePayload(mail) {
 }
 
 module.exports = {
+    cleanText,
     extractCode,
     buildMessagePayload
 };
