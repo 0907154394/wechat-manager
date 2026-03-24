@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Messages</title>
+    <title>Danh sách tin nhắn</title>
     <style>
         body {
             margin: 0;
@@ -90,10 +90,13 @@
 
     <script>
         function getLinkTokenFromPath() {
-            const parts = window.location.pathname.split("/").filter(Boolean);
-            if (parts.length >= 2 && parts[0] === "m") {
-                return parts[1];
+            const path = window.location.pathname;
+            const match = path.match(/^\/m\/([^/?#]+)$/);
+
+            if (match && match[1]) {
+                return decodeURIComponent(match[1]);
             }
+
             return "";
         }
 
@@ -115,10 +118,13 @@
                     }
                 });
 
-                const data = await res.json();
+                const data = await safeJson(res);
 
                 if (!res.ok) {
-                    list.innerHTML = "<div class='card'>" + escapeHtml(data.message || "Không tải được tin nhắn") + "</div>";
+                    list.innerHTML =
+                        "<div class='card'>" +
+                        escapeHtml(data.message || "Không tải được tin nhắn") +
+                        "</div>";
                     return;
                 }
 
@@ -127,19 +133,32 @@
                     return;
                 }
 
-                list.innerHTML = data.map(item => `
+                list.innerHTML = data.map((item) => `
                     <div class="card">
                         <div class="subject">${escapeHtml(item.subject || "(Không có tiêu đề)")}</div>
                         <div class="meta">
                             Từ: ${escapeHtml(item.sender || "Unknown")}<br>
-                            Lúc: ${item.createdAt ? new Date(item.createdAt).toLocaleString() : ""}
+                            Lúc: ${item.createdAt ? escapeHtml(new Date(item.createdAt).toLocaleString()) : ""}
                         </div>
                         ${item.code ? `<div class="code">${escapeHtml(item.code)}</div>` : ""}
                         <div class="content">${escapeHtml(item.content || "")}</div>
                     </div>
                 `).join("");
             } catch (err) {
-                list.innerHTML = `<div class="card">Lỗi tải dữ liệu: ${escapeHtml(err.message)}</div>`;
+                list.innerHTML =
+                    "<div class='card'>Lỗi tải dữ liệu: " +
+                    escapeHtml(err.message || "Unknown error") +
+                    "</div>";
+            }
+        }
+
+        async function safeJson(res) {
+            const text = await res.text();
+
+            try {
+                return text ? JSON.parse(text) : {};
+            } catch {
+                return { message: text || "Phản hồi không hợp lệ từ server" };
             }
         }
 

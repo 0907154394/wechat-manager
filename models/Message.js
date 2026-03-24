@@ -8,35 +8,72 @@ const messageSchema = new mongoose.Schema(
             required: true,
             index: true
         },
-        sender: {
-            type: String,
-            default: ""
-        },
+
         subject: {
             type: String,
-            default: ""
+            default: "",
+            trim: true
         },
+
+        sender: {
+            type: String,
+            default: "",
+            trim: true
+        },
+
         content: {
             type: String,
             default: ""
         },
+
         code: {
             type: String,
-            default: ""
+            default: "",
+            trim: true
         },
+
         uid: {
             type: Number,
-            required: true
+            default: 0,
+            index: true
         },
-        rawDate: {
+
+        messageId: {
+            type: String,
+            default: "",
+            trim: true
+        },
+
+        receivedAt: {
             type: Date,
-            default: null
+            default: Date.now
         }
     },
-    { timestamps: true }
+    {
+        timestamps: true
+    }
 );
 
-messageSchema.index({ accountId: 1, uid: 1 }, { unique: true });
+// Tăng tốc truy vấn lấy inbox theo account
+messageSchema.index({ accountId: 1, createdAt: -1 });
+
+// Tránh lưu trùng mail nếu worker đọc lại cùng 1 email
+messageSchema.index(
+    { accountId: 1, uid: 1 },
+    {
+        unique: true,
+        partialFilterExpression: { uid: { $gt: 0 } }
+    }
+);
+
+// Tránh trùng theo messageId nếu có
+messageSchema.index(
+    { accountId: 1, messageId: 1 },
+    {
+        unique: true,
+        partialFilterExpression: { messageId: { $type: "string", $ne: "" } }
+    }
+);
 
 module.exports =
-    mongoose.models.Message || mongoose.model("Message", messageSchema); 
+    mongoose.models.Message || mongoose.model("Message", messageSchema);
