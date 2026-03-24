@@ -34,13 +34,16 @@ app.use(
     })
 );
 
-app.use(express.static(path.join(__dirname, "public")));
-
 mongoose
     .connect(process.env.MONGODB_URI)
     .then(() => console.log("MongoDB connected"))
     .catch((err) => console.error("MongoDB connect error:", err));
 
+/**
+ * =========================
+ * API ROUTES
+ * =========================
+ */
 app.use("/api/auth", authRoutes);
 app.use("/api/messages", messageRoutes);
 
@@ -55,6 +58,29 @@ app.get("/api/health", (req, res) => {
     });
 });
 
+/**
+ * =========================
+ * PUBLIC TOKEN ROUTE
+ * Khách vào link token không cần login
+ * =========================
+ */
+app.get("/m/:token", (req, res) => {
+    return res.sendFile(path.join(__dirname, "public", "messages.html"));
+});
+
+/**
+ * =========================
+ * STATIC FILES
+ * =========================
+ */
+app.use(express.static(path.join(__dirname, "public")));
+
+/**
+ * =========================
+ * ADMIN PAGE ROUTES
+ * =========================
+ */
+
 // vào root thì bắt login admin
 app.get("/", (req, res) => {
     if (req.session && req.session.isAdmin) {
@@ -64,11 +90,11 @@ app.get("/", (req, res) => {
 });
 
 app.get("/home", requireAdmin, (req, res) => {
-    res.sendFile(path.join(__dirname, "public", "home.html"));
+    return res.sendFile(path.join(__dirname, "public", "home.html"));
 });
 
 app.get("/admin/login", redirectIfLoggedIn, (req, res) => {
-    res.sendFile(path.join(__dirname, "public", "login.html"));
+    return res.sendFile(path.join(__dirname, "public", "login.html"));
 });
 
 app.get("/login", redirectIfLoggedIn, (req, res) => {
@@ -76,29 +102,63 @@ app.get("/login", redirectIfLoggedIn, (req, res) => {
 });
 
 app.get("/admin", requireAdmin, (req, res) => {
-    res.sendFile(path.join(__dirname, "public", "index.html"));
+    return res.sendFile(path.join(__dirname, "public", "index.html"));
 });
 
-// link public cho khách
-app.get("/m/:token", (req, res) => {
-    res.sendFile(path.join(__dirname, "public", "messages.html"));
-});
-
-// không cho vào messages.html trực tiếp
+/**
+ * Không cho vào messages.html trực tiếp
+ * Chỉ được vào qua /m/:token
+ */
 app.get("/messages.html", (req, res) => {
     return res.redirect("/admin/login");
 });
 
+/**
+ * Không cho vào trực tiếp các trang html nội bộ nếu chưa login
+ */
+app.get("/index.html", requireAdmin, (req, res) => {
+    return res.sendFile(path.join(__dirname, "public", "index.html"));
+});
+
+app.get("/home.html", requireAdmin, (req, res) => {
+    return res.sendFile(path.join(__dirname, "public", "home.html"));
+});
+
+app.get("/login.html", redirectIfLoggedIn, (req, res) => {
+    return res.sendFile(path.join(__dirname, "public", "login.html"));
+});
+
+app.get("/admin-login.html", redirectIfLoggedIn, (req, res) => {
+    return res.sendFile(path.join(__dirname, "public", "admin-login.html"));
+});
+
+/**
+ * =========================
+ * 404 API
+ * =========================
+ */
 app.use("/api", (req, res) => {
-    res.status(404).json({
+    return res.status(404).json({
         message: "API route not found"
     });
 });
 
+/**
+ * =========================
+ * CATCH-ALL
+ * - Nếu là /m/... thì vẫn cho vào messages.html
+ * - Còn lại: admin thì vào /admin, chưa login thì về /admin/login
+ * =========================
+ */
 app.use((req, res) => {
+    if (req.path.startsWith("/m/")) {
+        return res.sendFile(path.join(__dirname, "public", "messages.html"));
+    }
+
     if (req.session && req.session.isAdmin) {
         return res.redirect("/admin");
     }
+
     return res.redirect("/admin/login");
 });
 
