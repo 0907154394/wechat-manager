@@ -1,11 +1,11 @@
 const express = require("express");
-const router = express.Router();
 const multer = require("multer");
 const { v4: uuidv4 } = require("uuid");
 
 const Account = require("../models/Account");
 const Message = require("../models/Message");
 
+const router = express.Router();
 const upload = multer({ storage: multer.memoryStorage() });
 
 function normalizeEmail(email) {
@@ -54,6 +54,10 @@ router.post("/create-bulk", async (req, res) => {
             return res.status(400).json({ message: "Email gốc không hợp lệ" });
         }
 
+        if (!password) {
+            return res.status(400).json({ message: "Mật khẩu không được để trống" });
+        }
+
         if (Number.isNaN(quantity) || quantity < 1) {
             return res.status(400).json({ message: "Số lượng không hợp lệ" });
         }
@@ -72,13 +76,13 @@ router.post("/create-bulk", async (req, res) => {
             });
         }
 
-        const allEmails = variants.map(v => `${v}@${domain}`);
+        const allEmails = variants.map((v) => `${v}@${domain}`);
 
         const existing = await Account.find({
             email: { $in: allEmails }
         }).select("email");
 
-        const existingSet = new Set(existing.map(x => x.email));
+        const existingSet = new Set(existing.map((x) => normalizeEmail(x.email)));
         const docsToInsert = [];
 
         for (const local of variants) {
@@ -86,7 +90,7 @@ router.post("/create-bulk", async (req, res) => {
 
             const email = `${local}@${domain}`;
 
-            if (existingSet.has(email)) continue;
+            if (existingSet.has(normalizeEmail(email))) continue;
 
             const tokens = buildTokens();
 
@@ -108,20 +112,24 @@ router.post("/create-bulk", async (req, res) => {
 
         const inserted = await Account.insertMany(docsToInsert);
 
-        res.json(inserted);
+        return res.json({
+            success: true,
+            count: inserted.length,
+            data: inserted
+        });
     } catch (error) {
         console.error("create-bulk error:", error);
-        res.status(500).json({ message: error.message });
+        return res.status(500).json({ message: error.message });
     }
 });
 
 router.get("/", async (req, res) => {
     try {
         const accounts = await Account.find().sort({ createdAt: -1 });
-        res.json(accounts);
+        return res.json(accounts);
     } catch (error) {
         console.error("get accounts error:", error);
-        res.status(500).json({ message: error.message });
+        return res.status(500).json({ message: error.message });
     }
 });
 
@@ -137,10 +145,10 @@ router.put("/sell/:id", async (req, res) => {
             return res.status(404).json({ message: "Không tìm thấy account" });
         }
 
-        res.json({ message: "updated", data: updated });
+        return res.json({ success: true, message: "updated", data: updated });
     } catch (error) {
         console.error("sell error:", error);
-        res.status(500).json({ message: error.message });
+        return res.status(500).json({ message: error.message });
     }
 });
 
@@ -156,10 +164,10 @@ router.put("/unsell/:id", async (req, res) => {
             return res.status(404).json({ message: "Không tìm thấy account" });
         }
 
-        res.json({ message: "updated", data: updated });
+        return res.json({ success: true, message: "updated", data: updated });
     } catch (error) {
         console.error("unsell error:", error);
-        res.status(500).json({ message: error.message });
+        return res.status(500).json({ message: error.message });
     }
 });
 
@@ -177,10 +185,10 @@ router.put("/wechat-id/:id", async (req, res) => {
             return res.status(404).json({ message: "Không tìm thấy account" });
         }
 
-        res.json({ message: "updated", data: updated });
+        return res.json({ success: true, message: "updated", data: updated });
     } catch (error) {
         console.error("wechat-id error:", error);
-        res.status(500).json({ message: error.message });
+        return res.status(500).json({ message: error.message });
     }
 });
 
@@ -196,10 +204,14 @@ router.put("/change-link/:id", async (req, res) => {
             return res.status(404).json({ message: "Không tìm thấy account" });
         }
 
-        res.json(updated);
+        return res.json({
+            success: true,
+            message: "Đổi link thành công",
+            data: updated
+        });
     } catch (error) {
         console.error("change-link error:", error);
-        res.status(500).json({ message: error.message });
+        return res.status(500).json({ message: error.message });
     }
 });
 
@@ -221,13 +233,14 @@ router.put("/generate-message-tokens", async (req, res) => {
             updatedCount++;
         }
 
-        res.json({
+        return res.json({
+            success: true,
             message: "Đã cập nhật messageToken cho dữ liệu cũ",
             updatedCount
         });
     } catch (error) {
         console.error("generate-message-tokens error:", error);
-        res.status(500).json({ message: error.message });
+        return res.status(500).json({ message: error.message });
     }
 });
 
@@ -243,13 +256,16 @@ router.post("/import-mail-file", upload.single("file"), async (req, res) => {
             return res.status(400).json({ message: "File không có dữ liệu" });
         }
 
-        const lines = raw.split(/\r?\n/).map(x => x.trim()).filter(Boolean);
+        const lines = raw
+            .split(/\r?\n/)
+            .map((x) => x.trim())
+            .filter(Boolean);
 
         if (lines.length < 2) {
             return res.status(400).json({ message: "File CSV không hợp lệ" });
         }
 
-        const headers = lines[0].split(",").map(x => x.trim().toLowerCase());
+        const headers = lines[0].split(",").map((x) => x.trim().toLowerCase());
 
         const idx = {
             email: headers.indexOf("email"),
@@ -266,7 +282,7 @@ router.post("/import-mail-file", upload.single("file"), async (req, res) => {
         let skipped = 0;
 
         for (let i = 1; i < lines.length; i++) {
-            const cols = lines[i].split(",").map(x => x.trim());
+            const cols = lines[i].split(",").map((x) => x.trim());
 
             const email = normalizeEmail(idx.email >= 0 ? cols[idx.email] : "");
             const password = String(idx.password >= 0 ? cols[idx.password] : "").trim();
@@ -274,8 +290,11 @@ router.post("/import-mail-file", upload.single("file"), async (req, res) => {
             const imapPort = Number(idx.imapPort >= 0 ? cols[idx.imapPort] : 993);
             const imapUser = String(idx.imapUser >= 0 ? cols[idx.imapUser] : email).trim();
             const imapPass = String(idx.imapPass >= 0 ? cols[idx.imapPass] : password).trim();
-            const secureRaw = String(idx.imapSecure >= 0 ? cols[idx.imapSecure] : "true").toLowerCase();
-            const imapSecure = secureRaw === "true" || secureRaw === "1" || secureRaw === "yes";
+            const secureRaw = String(
+                idx.imapSecure >= 0 ? cols[idx.imapSecure] : "true"
+            ).toLowerCase();
+            const imapSecure =
+                secureRaw === "true" || secureRaw === "1" || secureRaw === "yes";
 
             if (!email || !password || !imapHost) {
                 skipped++;
@@ -317,7 +336,8 @@ router.post("/import-mail-file", upload.single("file"), async (req, res) => {
             }
         }
 
-        res.json({
+        return res.json({
+            success: true,
             message: "Import CSV thành công",
             created,
             updated,
@@ -325,7 +345,7 @@ router.post("/import-mail-file", upload.single("file"), async (req, res) => {
         });
     } catch (error) {
         console.error("import-mail-file error:", error);
-        res.status(500).json({ message: error.message });
+        return res.status(500).json({ message: error.message });
     }
 });
 
@@ -341,12 +361,13 @@ router.delete("/:id", async (req, res) => {
 
         await Message.deleteMany({ accountId });
 
-        res.json({
+        return res.json({
+            success: true,
             message: "Đã xóa account và toàn bộ tin nhắn liên quan"
         });
     } catch (error) {
         console.error("delete account error:", error);
-        res.status(500).json({ message: error.message });
+        return res.status(500).json({ message: error.message });
     }
 });
 

@@ -48,17 +48,27 @@ router.post("/login", loginLimiter, async (req, res) => {
             });
         }
 
+        if (!req.session) {
+            return res.status(500).json({
+                message: "Session chưa được cấu hình trên server"
+            });
+        }
+
         req.session.regenerate((err) => {
             if (err) {
                 console.error("session regenerate error:", err);
-                return res.status(500).json({ message: "Lỗi đăng nhập" });
+                return res.status(500).json({
+                    message: "Lỗi đăng nhập"
+                });
             }
 
             req.session.isAdmin = true;
             req.session.adminUsername = username;
 
             return res.json({
-                message: "Đăng nhập thành công"
+                success: true,
+                message: "Đăng nhập thành công",
+                username
             });
         });
     } catch (error) {
@@ -70,14 +80,31 @@ router.post("/login", loginLimiter, async (req, res) => {
 });
 
 router.post("/logout", (req, res) => {
-    req.session.destroy(() => {
+    if (!req.session) {
+        return res.json({
+            success: true,
+            message: "Đã đăng xuất"
+        });
+    }
+
+    req.session.destroy((err) => {
+        if (err) {
+            console.error("logout error:", err);
+            return res.status(500).json({
+                message: "Không thể đăng xuất"
+            });
+        }
+
         res.clearCookie("wechat.sid");
-        res.json({ message: "Đã đăng xuất" });
+        return res.json({
+            success: true,
+            message: "Đã đăng xuất"
+        });
     });
 });
 
 router.get("/me", (req, res) => {
-    res.json({
+    return res.json({
         isAdmin: !!(req.session && req.session.isAdmin),
         username: req.session?.adminUsername || null
     });
