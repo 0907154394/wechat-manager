@@ -192,7 +192,7 @@ function renderTable(data) {
 
     data.forEach((a, i) => {
         const statusClass = a.status === "DA BAN" ? "da" : "chua";
-        const fullLink = a.linkToken ? window.location.origin + a.linkToken : "";
+        const fullLink = a.linkToken ? `${window.location.origin}/m/${a.linkToken}` : "";
 
         html += `
         <tr>
@@ -229,7 +229,7 @@ function renderTable(data) {
                     a.linkToken
                         ? `
                         <div class="token-stack">
-                            <a class="token-link" href="${fullLink}" target="_blank">${escapeHtml(a.linkToken)}</a>
+                            <a class="token-link" href="${fullLink}" target="_blank">${escapeHtml("/m/" + a.linkToken)}</a>
                             <div class="inline-actions">
                                 <button class="copy-btn small-btn" onclick="copyText('${escapeJs(fullLink)}', 'Đã copy link token')">Copy Link</button>
                                 <button class="link-btn small-btn" onclick="openLinkToken('${escapeJs(fullLink)}')">Mở link</button>
@@ -252,7 +252,7 @@ function renderTable(data) {
                 }
 
                 <button class="link-btn" onclick="changeLink('${a._id}')">Đổi link</button>
-                <button class="link-btn" onclick="viewMessages('${a.messageToken || ""}')">Tin nhắn</button>
+                <button class="link-btn" onclick="viewMessages('${escapeJs(a.messageToken || "")}')">Tin nhắn</button>
                 <button class="delete-btn" onclick="deleteAccount('${a._id}')">Xóa</button>
             </td>
         </tr>
@@ -413,13 +413,13 @@ async function changeLink(id) {
     }
 }
 
-function viewMessages(token) {
-    if (!token) {
+function viewMessages(messageToken) {
+    if (!messageToken) {
         alert("Account chưa có token tin nhắn");
         return;
     }
 
-    window.open("/messages.html?token=" + encodeURIComponent(token), "_blank");
+    window.open("/api/messages/admin/" + encodeURIComponent(messageToken), "_blank");
 }
 
 function openLinkToken(fullLink) {
@@ -470,7 +470,7 @@ function exportAccounts() {
     let content = "Email,Password,TrangThai,WeChatID,LinkToken,MessageToken\n";
 
     filteredAccounts.forEach((a) => {
-        content += `"${csvSafe(a.email)}","${csvSafe(a.password)}","${csvSafe(a.status)}","${csvSafe(a.wechatId)}","${csvSafe(a.linkToken)}","${csvSafe(a.messageToken)}"\n`;
+        content += `"${csvSafe(a.email)}","${csvSafe(a.password)}","${csvSafe(a.status)}","${csvSafe(a.wechatId)}","${csvSafe("/m/" + (a.linkToken || ""))}","${csvSafe(a.messageToken)}"\n`;
     });
 
     const blob = new Blob([content], {

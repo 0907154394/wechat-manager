@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Admin Login</title>
-    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="/style.css">
     <style>
         body{
             display:flex;
@@ -31,8 +31,10 @@
             margin-bottom:18px;
         }
         .login-box .form-row{
+            display:flex;
             flex-direction:column;
             align-items:stretch;
+            gap:12px;
         }
         .login-error{
             margin-top:12px;
@@ -50,8 +52,8 @@
         <p>Đăng nhập để vào trang quản trị.</p>
 
         <div class="form-row">
-            <input id="username" type="text" placeholder="Tên đăng nhập">
-            <input id="password" type="password" placeholder="Mật khẩu">
+            <input id="username" type="text" placeholder="Tên đăng nhập" autocomplete="username">
+            <input id="password" type="password" placeholder="Mật khẩu" autocomplete="current-password">
             <button class="login-btn" onclick="loginAdmin()">Đăng nhập</button>
         </div>
 
@@ -70,7 +72,8 @@
                 const res = await fetch("/api/auth/login", {
                     method: "POST",
                     headers: {
-                        "Content-Type": "application/json"
+                        "Content-Type": "application/json",
+                        "Accept": "application/json"
                     },
                     body: JSON.stringify({ username, password })
                 });
@@ -82,11 +85,19 @@
                     return;
                 }
 
-                window.location.href = "/";
+                window.location.href = "/admin";
             } catch (err) {
                 errorEl.textContent = "Lỗi kết nối server";
             }
         }
+
+        document.getElementById("password").addEventListener("keydown", function (e) {
+            if (e.key === "Enter") loginAdmin();
+        });
+
+        document.getElementById("username").addEventListener("keydown", function (e) {
+            if (e.key === "Enter") loginAdmin();
+        });
     </script>
 </body>
 </html>

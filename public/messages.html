@@ -14,6 +14,11 @@
         }
 
         h1 {
+            margin-bottom: 8px;
+        }
+
+        .sub {
+            color: #9fb3d9;
             margin-bottom: 20px;
         }
 
@@ -21,6 +26,7 @@
             display: flex;
             gap: 12px;
             margin-bottom: 20px;
+            flex-wrap: wrap;
         }
 
         button {
@@ -74,6 +80,7 @@
 </head>
 <body>
     <h1>Danh sách tin nhắn</h1>
+    <div class="sub">Bạn đang xem hộp thư qua link được cấp riêng.</div>
 
     <div class="toolbar">
         <button onclick="loadMessages()">Tải lại</button>
@@ -82,13 +89,38 @@
     <div id="list" class="list"></div>
 
     <script>
+        function getLinkTokenFromPath() {
+            const parts = window.location.pathname.split("/").filter(Boolean);
+            if (parts.length >= 2 && parts[0] === "m") {
+                return parts[1];
+            }
+            return "";
+        }
+
         async function loadMessages() {
             const list = document.getElementById("list");
-            list.innerHTML = "Đang tải...";
+            const linkToken = getLinkTokenFromPath();
+
+            if (!linkToken) {
+                list.innerHTML = "<div class='card'>Link không hợp lệ.</div>";
+                return;
+            }
+
+            list.innerHTML = "<div class='card'>Đang tải...</div>";
 
             try {
-                const res = await fetch("/api/messages");
+                const res = await fetch("/api/messages/public/" + encodeURIComponent(linkToken), {
+                    headers: {
+                        Accept: "application/json"
+                    }
+                });
+
                 const data = await res.json();
+
+                if (!res.ok) {
+                    list.innerHTML = "<div class='card'>" + escapeHtml(data.message || "Không tải được tin nhắn") + "</div>";
+                    return;
+                }
 
                 if (!Array.isArray(data) || data.length === 0) {
                     list.innerHTML = "<div class='card'>Chưa có tin nhắn nào.</div>";
@@ -99,10 +131,10 @@
                     <div class="card">
                         <div class="subject">${escapeHtml(item.subject || "(Không có tiêu đề)")}</div>
                         <div class="meta">
-                            Từ: ${escapeHtml(item.sender || "Unknown")} <br>
+                            Từ: ${escapeHtml(item.sender || "Unknown")}<br>
                             Lúc: ${item.createdAt ? new Date(item.createdAt).toLocaleString() : ""}
                         </div>
-                        <div class="code">${escapeHtml(item.code || "")}</div>
+                        ${item.code ? `<div class="code">${escapeHtml(item.code)}</div>` : ""}
                         <div class="content">${escapeHtml(item.content || "")}</div>
                     </div>
                 `).join("");

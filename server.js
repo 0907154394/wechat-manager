@@ -9,27 +9,16 @@ const messageRoutes = require("./routes/messageRoutes");
 const workerRoutes = require("./routes/workerRoutes");
 const authRoutes = require("./routes/authRoutes");
 const accountRoutes = require("./routes/accountRoutes");
+const { requireAdmin, redirectIfLoggedIn } = require("./middleware/auth");
 
 const app = express();
 const PORT = process.env.PORT || 10000;
 
-// trust proxy for Render
 app.set("trust proxy", 1);
 
-// parse body
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// static files
-app.use(express.static(path.join(__dirname, "public")));
-
-// connect mongodb
-mongoose
-    .connect(process.env.MONGODB_URI)
-    .then(() => console.log("MongoDB connected"))
-    .catch((err) => console.error("MongoDB connect error:", err));
-
-// session
 app.use(
     session({
         name: "wechat.sid",
@@ -45,13 +34,20 @@ app.use(
     })
 );
 
-// api routes
-app.use("/api/auth", authRoutes);
-app.use("/api/accounts", accountRoutes);
-app.use("/api/messages", messageRoutes);
-app.use("/api/worker", workerRoutes);
+app.use(express.static(path.join(__dirname, "public")));
 
-// health check
+mongoose
+    .connect(process.env.MONGODB_URI)
+    .then(() => console.log("MongoDB connected"))
+    .catch((err) => console.error("MongoDB connect error:", err));
+
+app.use("/api/auth", authRoutes);
+app.use("/api/messages", messageRoutes);
+
+// bảo vệ toàn bộ api admin
+app.use("/api/accounts", requireAdmin, accountRoutes);
+app.use("/api/worker", requireAdmin, workerRoutes);
+
 app.get("/api/health", (req, res) => {
     res.json({
         ok: true,
@@ -59,37 +55,51 @@ app.get("/api/health", (req, res) => {
     });
 });
 
-// pages
+// vào root thì bắt login admin
 app.get("/", (req, res) => {
+    if (req.session && req.session.isAdmin) {
+        return res.redirect("/admin");
+    }
+    return res.redirect("/admin/login");
+});
+
+app.get("/home", requireAdmin, (req, res) => {
     res.sendFile(path.join(__dirname, "public", "home.html"));
 });
 
-app.get("/admin/login", (req, res) => {
-    res.sendFile(path.join(__dirname, "public", "admin-login.html"));
-});
-
-app.get("/login", (req, res) => {
+app.get("/admin/login", redirectIfLoggedIn, (req, res) => {
     res.sendFile(path.join(__dirname, "public", "login.html"));
 });
 
-app.get("/messages.html", (req, res) => {
-    res.sendFile(path.join(__dirname, "public", "messages.html"));
+app.get("/login", redirectIfLoggedIn, (req, res) => {
+    return res.redirect("/admin/login");
 });
 
-app.get("/admin", (req, res) => {
+app.get("/admin", requireAdmin, (req, res) => {
     res.sendFile(path.join(__dirname, "public", "index.html"));
 });
 
-// fallback api 404
+// link public cho khách
+app.get("/m/:token", (req, res) => {
+    res.sendFile(path.join(__dirname, "public", "messages.html"));
+});
+
+// không cho vào messages.html trực tiếp
+app.get("/messages.html", (req, res) => {
+    return res.redirect("/admin/login");
+});
+
 app.use("/api", (req, res) => {
     res.status(404).json({
         message: "API route not found"
     });
 });
 
-// fallback page
 app.use((req, res) => {
-    res.status(404).sendFile(path.join(__dirname, "public", "login.html"));
+    if (req.session && req.session.isAdmin) {
+        return res.redirect("/admin");
+    }
+    return res.redirect("/admin/login");
 });
 
 app.listen(PORT, () => {
