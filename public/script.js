@@ -152,7 +152,14 @@ async function createAccounts() {
             return;
         }
 
-        alert(`Đã tạo ${Array.isArray(data) ? data.length : 0} email biến thể`);
+        const createdCount =
+            typeof data.count === "number"
+                ? data.count
+                : Array.isArray(data.data)
+                    ? data.data.length
+                    : 0;
+
+        alert(`Đã tạo ${createdCount} email biến thể`);
 
         const baseEmailEl = document.getElementById("baseEmail");
         const quantityEl = document.getElementById("quantity");
@@ -174,6 +181,10 @@ async function createAccounts() {
     }
 }
 
+function normalizeLinkToken(token) {
+    return String(token || "").replace(/^\/m\//, "").trim();
+}
+
 function renderTable(data) {
     const table = document.getElementById("table");
 
@@ -192,7 +203,10 @@ function renderTable(data) {
 
     data.forEach((a, i) => {
         const statusClass = a.status === "DA BAN" ? "da" : "chua";
-        const fullLink = a.linkToken ? `${window.location.origin}/m/${a.linkToken}` : "";
+        const normalizedToken = normalizeLinkToken(a.linkToken);
+        const fullLink = normalizedToken
+            ? `${window.location.origin}/m/${normalizedToken}`
+            : "";
 
         html += `
         <tr>
@@ -226,10 +240,10 @@ function renderTable(data) {
 
             <td>
                 ${
-                    a.linkToken
+                    normalizedToken
                         ? `
                         <div class="token-stack">
-                            <a class="token-link" href="${fullLink}" target="_blank">${escapeHtml("/m/" + a.linkToken)}</a>
+                            <a class="token-link" href="${fullLink}" target="_blank">${escapeHtml("/m/" + normalizedToken)}</a>
                             <div class="inline-actions">
                                 <button class="copy-btn small-btn" onclick="copyText('${escapeJs(fullLink)}', 'Đã copy link token')">Copy Link</button>
                                 <button class="link-btn small-btn" onclick="openLinkToken('${escapeJs(fullLink)}')">Mở link</button>
@@ -279,7 +293,7 @@ function filterAccounts() {
     filteredAccounts = allAccounts.filter((account) => {
         const email = String(account.email || "").toLowerCase();
         const wechatId = String(account.wechatId || "").toLowerCase();
-        const linkToken = String(account.linkToken || "").toLowerCase();
+        const linkToken = normalizeLinkToken(account.linkToken).toLowerCase();
         const messageToken = String(account.messageToken || "").toLowerCase();
 
         const matchKeyword =
@@ -470,7 +484,8 @@ function exportAccounts() {
     let content = "Email,Password,TrangThai,WeChatID,LinkToken,MessageToken\n";
 
     filteredAccounts.forEach((a) => {
-        content += `"${csvSafe(a.email)}","${csvSafe(a.password)}","${csvSafe(a.status)}","${csvSafe(a.wechatId)}","${csvSafe("/m/" + (a.linkToken || ""))}","${csvSafe(a.messageToken)}"\n`;
+        const normalizedToken = normalizeLinkToken(a.linkToken);
+        content += `"${csvSafe(a.email)}","${csvSafe(a.password)}","${csvSafe(a.status)}","${csvSafe(a.wechatId)}","${csvSafe("/m/" + normalizedToken)}","${csvSafe(a.messageToken)}"\n`;
     });
 
     const blob = new Blob([content], {

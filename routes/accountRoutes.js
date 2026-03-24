@@ -18,7 +18,7 @@ function newToken(len = 16) {
 
 function buildTokens() {
     return {
-        linkToken: `/m/${newToken(16)}`,
+        linkToken: newToken(16),
         messageToken: newToken(20)
     };
 }
@@ -26,8 +26,13 @@ function buildTokens() {
 function ensureAccountTokens(account) {
     let changed = false;
 
+    if (account.linkToken && String(account.linkToken).startsWith("/m/")) {
+        account.linkToken = String(account.linkToken).replace(/^\/m\//, "");
+        changed = true;
+    }
+
     if (!account.linkToken || !String(account.linkToken).trim()) {
-        account.linkToken = `/m/${newToken(16)}`;
+        account.linkToken = newToken(16);
         changed = true;
     }
 
@@ -146,7 +151,6 @@ router.get("/", async (req, res) => {
     try {
         const accounts = await Account.find().sort({ createdAt: -1 });
 
-        // tự vá token cho dữ liệu cũ
         const docsNeedSave = [];
         for (const account of accounts) {
             if (ensureAccountTokens(account)) {
@@ -158,7 +162,8 @@ router.get("/", async (req, res) => {
             await Promise.all(docsNeedSave);
         }
 
-        return res.json(accounts);
+        const refreshedAccounts = await Account.find().sort({ createdAt: -1 });
+        return res.json(refreshedAccounts);
     } catch (error) {
         console.error("get accounts error:", error);
         return res.status(500).json({ message: error.message });
@@ -228,7 +233,7 @@ router.put("/change-link/:id", async (req, res) => {
     try {
         const updated = await Account.findByIdAndUpdate(
             req.params.id,
-            { linkToken: `/m/${newToken(16)}` },
+            { linkToken: newToken(16) },
             { new: true }
         );
 
@@ -261,9 +266,7 @@ router.put("/generate-message-tokens", async (req, res) => {
 
         for (const account of accounts) {
             account.messageToken = newToken(20);
-            if (!account.linkToken || !String(account.linkToken).trim()) {
-                account.linkToken = `/m/${newToken(16)}`;
-            }
+            ensureAccountTokens(account);
             await account.save();
             updatedCount++;
         }
@@ -275,6 +278,30 @@ router.put("/generate-message-tokens", async (req, res) => {
         });
     } catch (error) {
         console.error("generate-message-tokens error:", error);
+        return res.status(500).json({ message: error.message });
+    }
+});
+
+router.put("/fix-link-tokens", async (req, res) => {
+    try {
+        const accounts = await Account.find();
+        let fixed = 0;
+
+        for (const account of accounts) {
+            if (account.linkToken && String(account.linkToken).startsWith("/m/")) {
+                account.linkToken = String(account.linkToken).replace(/^\/m\//, "");
+                await account.save();
+                fixed++;
+            }
+        }
+
+        return res.json({
+            success: true,
+            message: "Đã sửa format linkToken cũ",
+            fixed
+        });
+    } catch (error) {
+        console.error("fix-link-tokens error:", error);
         return res.status(500).json({ message: error.message });
     }
 });
