@@ -4,7 +4,6 @@ const express = require("express");
 const mongoose = require("mongoose");
 const path = require("path");
 const session = require("express-session");
-const MongoStore = require("connect-mongo");
 
 const messageRoutes = require("./routes/messageRoutes");
 const workerRoutes = require("./routes/workerRoutes");
@@ -14,17 +13,17 @@ const accountRoutes = require("./routes/accountRoutes");
 const app = express();
 const PORT = process.env.PORT || 10000;
 
-// trust proxy for Render / reverse proxy
+// trust proxy for Render
 app.set("trust proxy", 1);
 
-// middleware parse body
+// parse body
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 // static files
 app.use(express.static(path.join(__dirname, "public")));
 
-// mongodb
+// connect mongodb
 mongoose
     .connect(process.env.MONGODB_URI)
     .then(() => console.log("MongoDB connected"))
@@ -37,10 +36,6 @@ app.use(
         secret: process.env.SESSION_SECRET || "wechat_manager_secret_change_me",
         resave: false,
         saveUninitialized: false,
-        store: MongoStore.create({
-            mongoUrl: process.env.MONGODB_URI,
-            collectionName: "sessions"
-        }),
         cookie: {
             httpOnly: true,
             secure: process.env.NODE_ENV === "production",
@@ -85,7 +80,7 @@ app.get("/admin", (req, res) => {
     res.sendFile(path.join(__dirname, "public", "index.html"));
 });
 
-// fallback 404 for api
+// fallback api 404
 app.use("/api", (req, res) => {
     res.status(404).json({
         message: "API route not found"
