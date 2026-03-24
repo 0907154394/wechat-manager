@@ -12,11 +12,31 @@ function normalizeEmail(email) {
     return String(email || "").trim().toLowerCase();
 }
 
+function newToken(len = 16) {
+    return uuidv4().replace(/-/g, "").slice(0, len);
+}
+
 function buildTokens() {
     return {
-        linkToken: "/m/" + uuidv4().replace(/-/g, "").substring(0, 16),
-        messageToken: uuidv4().replace(/-/g, "").substring(0, 20)
+        linkToken: `/m/${newToken(16)}`,
+        messageToken: newToken(20)
     };
+}
+
+function ensureAccountTokens(account) {
+    let changed = false;
+
+    if (!account.linkToken || !String(account.linkToken).trim()) {
+        account.linkToken = `/m/${newToken(16)}`;
+        changed = true;
+    }
+
+    if (!account.messageToken || !String(account.messageToken).trim()) {
+        account.messageToken = newToken(20);
+        changed = true;
+    }
+
+    return changed;
 }
 
 function generateDotVariants(localPart) {
@@ -89,7 +109,6 @@ router.post("/create-bulk", async (req, res) => {
             if (docsToInsert.length >= quantity) break;
 
             const email = `${local}@${domain}`;
-
             if (existingSet.has(normalizeEmail(email))) continue;
 
             const tokens = buildTokens();
@@ -126,6 +145,19 @@ router.post("/create-bulk", async (req, res) => {
 router.get("/", async (req, res) => {
     try {
         const accounts = await Account.find().sort({ createdAt: -1 });
+
+        // tự vá token cho dữ liệu cũ
+        const docsNeedSave = [];
+        for (const account of accounts) {
+            if (ensureAccountTokens(account)) {
+                docsNeedSave.push(account.save());
+            }
+        }
+
+        if (docsNeedSave.length) {
+            await Promise.all(docsNeedSave);
+        }
+
         return res.json(accounts);
     } catch (error) {
         console.error("get accounts error:", error);
@@ -196,7 +228,7 @@ router.put("/change-link/:id", async (req, res) => {
     try {
         const updated = await Account.findByIdAndUpdate(
             req.params.id,
-            { linkToken: buildTokens().linkToken },
+            { linkToken: `/m/${newToken(16)}` },
             { new: true }
         );
 
@@ -228,14 +260,17 @@ router.put("/generate-message-tokens", async (req, res) => {
         let updatedCount = 0;
 
         for (const account of accounts) {
-            account.messageToken = buildTokens().messageToken;
+            account.messageToken = newToken(20);
+            if (!account.linkToken || !String(account.linkToken).trim()) {
+                account.linkToken = `/m/${newToken(16)}`;
+            }
             await account.save();
             updatedCount++;
         }
 
         return res.json({
             success: true,
-            message: "Đã cập nhật messageToken cho dữ liệu cũ",
+            message: "Đã cập nhật token cho dữ liệu cũ",
             updatedCount
         });
     } catch (error) {
@@ -293,6 +328,7 @@ router.post("/import-mail-file", upload.single("file"), async (req, res) => {
             const secureRaw = String(
                 idx.imapSecure >= 0 ? cols[idx.imapSecure] : "true"
             ).toLowerCase();
+
             const imapSecure =
                 secureRaw === "true" || secureRaw === "1" || secureRaw === "yes";
 
@@ -331,6 +367,9 @@ router.post("/import-mail-file", upload.single("file"), async (req, res) => {
                 account.imapUser = imapUser;
                 account.imapPass = imapPass;
                 account.imapEnabled = true;
+
+                ensureAccountTokens(account);
+
                 await account.save();
                 updated++;
             }

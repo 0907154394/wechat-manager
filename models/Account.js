@@ -24,6 +24,20 @@ const accountSchema = new mongoose.Schema(
             trim: true
         },
 
+        // token truy cập trang tin nhắn
+        linkToken: {
+            type: String,
+            default: "",
+            trim: true
+        },
+
+        // token dùng cho inbox/message riêng của account
+        messageToken: {
+            type: String,
+            default: "",
+            trim: true
+        },
+
         imapHost: {
             type: String,
             default: "",
