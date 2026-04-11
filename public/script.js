@@ -2,11 +2,45 @@ let allAccounts = [];
 let filteredAccounts = [];
 let selectedExcelFile = null;
 
+// ─── Auth helpers ────────────────────────────────────────────────────────────
+
+function getAdminToken() {
+    return localStorage.getItem("adminToken") || "";
+}
+
+function logout() {
+    localStorage.removeItem("adminToken");
+    window.location.replace("/login.html");
+}
+
+// Wrapper around fetch() that always includes the admin token header.
+// Automatically redirects to login on 401.
+async function adminFetch(url, options = {}) {
+    const token = getAdminToken();
+    options.headers = Object.assign({}, options.headers, {
+        "x-admin-token": token
+    });
+
+    const res = await fetch(url, options);
+
+    if (res.status === 401) {
+        localStorage.removeItem("adminToken");
+        window.location.replace("/login.html");
+        throw new Error("Session expired");
+    }
+
+    return res;
+}
+
+// ─── Init ─────────────────────────────────────────────────────────────────────
+
 window.onload = async () => {
     bindFileDrop();
     await loadAccounts();
     await loadWorkerStatus();
 };
+
+// ─── File drop ───────────────────────────────────────────────────────────────
 
 function bindFileDrop() {
     const dropZone = document.getElementById("dropZone");
@@ -54,9 +88,11 @@ function showSelectedFileName() {
         : "";
 }
 
+// ─── Accounts ────────────────────────────────────────────────────────────────
+
 async function loadAccounts() {
     try {
-        const res = await fetch("/api/accounts");
+        const res = await adminFetch("/api/accounts");
         const data = await safeJson(res);
 
         if (!res.ok) {
@@ -70,15 +106,21 @@ async function loadAccounts() {
         renderTable(filteredAccounts);
         updateStats(allAccounts);
     } catch (err) {
-        console.error("loadAccounts error:", err);
-        alert("Lỗi kết nối server");
+        if (err.message !== "Session expired") {
+            console.error("loadAccounts error:", err);
+            alert("Lỗi kết nối server");
+        }
     }
 }
 
 async function createAccounts() {
-    const baseEmail = document.getElementById("baseEmail")?.value.trim() || "";
-    const quantityValue = document.getElementById("quantity")?.value.trim() || "";
+    const baseEmail =
+        document.getElementById("baseEmail")?.value.trim() || "";
+    const quantityValue =
+        document.getElementById("quantity")?.value.trim() || "";
     const password = document.getElementById("password")?.value.trim() || "";
+    const gmailAppPassword =
+        document.getElementById("gmailAppPassword")?.value.trim() || "";
 
     const quantity = Number.parseInt(quantityValue, 10);
 
@@ -99,15 +141,14 @@ async function createAccounts() {
     }
 
     try {
-        const res = await fetch("/api/accounts/create-bulk", {
+        const res = await adminFetch("/api/accounts/create-bulk", {
             method: "POST",
-            headers: {
-                "Content-Type": "application/json"
-            },
+            headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
                 baseEmail,
                 quantity,
-                password
+                password,
+                gmailAppPassword
             })
         });
 
@@ -118,20 +159,24 @@ async function createAccounts() {
             return;
         }
 
-        alert(`Đã tạo ${Array.isArray(data) ? data.length : 0} email biến thể`);
+        const count = Array.isArray(data) ? data.length : 0;
+        const imapNote =
+            gmailAppPassword && count > 0
+                ? ` (IMAP Gmail đã bật cho ${count} variants)`
+                : "";
+        alert(`Đã tạo ${count} email biến thể${imapNote}`);
 
-        const baseEmailEl = document.getElementById("baseEmail");
-        const quantityEl = document.getElementById("quantity");
-        const passwordEl = document.getElementById("password");
-
-        if (baseEmailEl) baseEmailEl.value = "";
-        if (quantityEl) quantityEl.value = "";
-        if (passwordEl) passwordEl.value = "";
+        document.getElementById("baseEmail").value = "";
+        document.getElementById("quantity").value = "";
+        document.getElementById("password").value = "";
+        document.getElementById("gmailAppPassword").value = "";
 
         await loadAccounts();
     } catch (err) {
-        console.error("createAccounts error:", err);
-        alert("Lỗi kết nối server");
+        if (err.message !== "Session expired") {
+            console.error("createAccounts error:", err);
+            alert("Lỗi kết nối server");
+        }
     } finally {
         if (createButton) {
             createButton.disabled = false;
@@ -219,6 +264,7 @@ function renderTable(data) {
 
                 <button class="link-btn" onclick="changeLink('${a._id}')">Đổi link</button>
                 <button class="link-btn" onclick="viewMessages('${a.messageToken || ""}')">Tin nhắn</button>
+                <button class="link-btn" onclick="editImap('${a._id}', '${escapeJs(a.imapUser||a.email||"")}', '${escapeJs(a.imapHost||"")}')">IMAP</button>
                 <button class="delete-btn" onclick="deleteAccount('${a._id}')">Xóa</button>
             </td>
         </tr>
@@ -239,7 +285,8 @@ function updateStats(data) {
 }
 
 function filterAccounts() {
-    const keyword = document.getElementById("filterDomain")?.value.trim().toLowerCase() || "";
+    const keyword =
+        document.getElementById("filterDomain")?.value.trim().toLowerCase() || "";
     const status = document.getElementById("filterStatus")?.value || "";
 
     filteredAccounts = allAccounts.filter(account => {
@@ -265,7 +312,7 @@ function filterAccounts() {
 
 async function sell(id) {
     try {
-        const res = await fetch("/api/accounts/sell/" + id, {
+        const res = await adminFetch("/api/accounts/sell/" + id, {
             method: "PUT"
         });
 
@@ -278,14 +325,16 @@ async function sell(id) {
 
         await loadAccounts();
     } catch (err) {
-        console.error("sell error:", err);
-        alert("Lỗi kết nối server");
+        if (err.message !== "Session expired") {
+            console.error("sell error:", err);
+            alert("Lỗi kết nối server");
+        }
     }
 }
 
 async function unsell(id) {
     try {
-        const res = await fetch("/api/accounts/unsell/" + id, {
+        const res = await adminFetch("/api/accounts/unsell/" + id, {
             method: "PUT"
         });
 
@@ -298,8 +347,10 @@ async function unsell(id) {
 
         await loadAccounts();
     } catch (err) {
-        console.error("unsell error:", err);
-        alert("Lỗi kết nối server");
+        if (err.message !== "Session expired") {
+            console.error("unsell error:", err);
+            alert("Lỗi kết nối server");
+        }
     }
 }
 
@@ -311,14 +362,10 @@ async function updateWechatId(id) {
     if (wechatId === null) return;
 
     try {
-        const res = await fetch("/api/accounts/wechat-id/" + id, {
+        const res = await adminFetch("/api/accounts/wechat-id/" + id, {
             method: "PUT",
-            headers: {
-                "Content-Type": "application/json"
-            },
-            body: JSON.stringify({
-                wechatId: wechatId.trim()
-            })
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ wechatId: wechatId.trim() })
         });
 
         const data = await safeJson(res);
@@ -330,14 +377,16 @@ async function updateWechatId(id) {
 
         await loadAccounts();
     } catch (err) {
-        console.error("updateWechatId error:", err);
-        alert("Lỗi kết nối server");
+        if (err.message !== "Session expired") {
+            console.error("updateWechatId error:", err);
+            alert("Lỗi kết nối server");
+        }
     }
 }
 
 async function changeLink(id) {
     try {
-        const res = await fetch("/api/accounts/change-link/" + id, {
+        const res = await adminFetch("/api/accounts/change-link/" + id, {
             method: "PUT"
         });
 
@@ -350,8 +399,10 @@ async function changeLink(id) {
 
         await loadAccounts();
     } catch (err) {
-        console.error("changeLink error:", err);
-        alert("Lỗi kết nối server");
+        if (err.message !== "Session expired") {
+            console.error("changeLink error:", err);
+            alert("Lỗi kết nối server");
+        }
     }
 }
 
@@ -378,7 +429,7 @@ async function deleteAccount(id) {
     if (!ok) return;
 
     try {
-        const res = await fetch("/api/accounts/" + id, {
+        const res = await adminFetch("/api/accounts/" + id, {
             method: "DELETE"
         });
 
@@ -392,8 +443,10 @@ async function deleteAccount(id) {
         alert(data.message || "Đã xóa account");
         await loadAccounts();
     } catch (err) {
-        console.error("deleteAccount error:", err);
-        alert("Lỗi kết nối server");
+        if (err.message !== "Session expired") {
+            console.error("deleteAccount error:", err);
+            alert("Lỗi kết nối server");
+        }
     }
 }
 
@@ -409,22 +462,20 @@ function exportAccounts() {
         content += `"${csvSafe(a.email)}","${csvSafe(a.password)}","${csvSafe(a.status)}","${csvSafe(a.wechatId)}","${csvSafe(a.linkToken)}","${csvSafe(a.messageToken)}"\n`;
     });
 
-    const blob = new Blob([content], {
-        type: "text/csv;charset=utf-8;"
-    });
-
+    const blob = new Blob([content], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
     link.download = "accounts.csv";
     link.click();
-
     URL.revokeObjectURL(url);
 }
 
+// ─── Worker ───────────────────────────────────────────────────────────────────
+
 async function loadWorkerStatus() {
     try {
-        const res = await fetch("/api/worker/status");
+        const res = await adminFetch("/api/worker/status");
         const data = await safeJson(res);
 
         const badge = document.getElementById("workerStatusBadge");
@@ -441,25 +492,24 @@ async function loadWorkerStatus() {
                 Worker đang chạy.<br>
                 Active accounts: <b>${data.activeAccounts || 0}</b><br>
                 Last run: <b>${data.lastRunAt || "-"}</b><br>
-                Last error: <b>${data.lastError || "-"}</b>
+                Last error: <b>${escapeHtml(data.lastError || "-")}</b>
             `;
         } else {
             badge.textContent = "OFFLINE";
             badge.classList.remove("online");
             badge.classList.add("offline");
-            info.textContent = "Worker service chưa chạy trên PC.";
+            info.textContent = "Worker service chưa chạy.";
         }
     } catch (err) {
-        console.error("loadWorkerStatus error:", err);
+        if (err.message !== "Session expired") {
+            console.error("loadWorkerStatus error:", err);
+        }
     }
 }
 
 async function startWorker() {
     try {
-        const res = await fetch("/api/worker/start", {
-            method: "POST"
-        });
-
+        const res = await adminFetch("/api/worker/start", { method: "POST" });
         const data = await safeJson(res);
 
         if (!res.ok) {
@@ -470,17 +520,16 @@ async function startWorker() {
         await loadWorkerStatus();
         alert("Worker đã start");
     } catch (err) {
-        console.error("startWorker error:", err);
-        alert("Lỗi kết nối server");
+        if (err.message !== "Session expired") {
+            console.error("startWorker error:", err);
+            alert("Lỗi kết nối server");
+        }
     }
 }
 
 async function stopWorker() {
     try {
-        const res = await fetch("/api/worker/stop", {
-            method: "POST"
-        });
-
+        const res = await adminFetch("/api/worker/stop", { method: "POST" });
         const data = await safeJson(res);
 
         if (!res.ok) {
@@ -491,17 +540,16 @@ async function stopWorker() {
         await loadWorkerStatus();
         alert("Worker đã stop");
     } catch (err) {
-        console.error("stopWorker error:", err);
-        alert("Lỗi kết nối server");
+        if (err.message !== "Session expired") {
+            console.error("stopWorker error:", err);
+            alert("Lỗi kết nối server");
+        }
     }
 }
 
 async function reloadWorker() {
     try {
-        const res = await fetch("/api/worker/reload", {
-            method: "POST"
-        });
-
+        const res = await adminFetch("/api/worker/reload", { method: "POST" });
         const data = await safeJson(res);
 
         if (!res.ok) {
@@ -512,10 +560,14 @@ async function reloadWorker() {
         await loadWorkerStatus();
         alert("Reload accounts thành công");
     } catch (err) {
-        console.error("reloadWorker error:", err);
-        alert("Lỗi kết nối server");
+        if (err.message !== "Session expired") {
+            console.error("reloadWorker error:", err);
+            alert("Lỗi kết nối server");
+        }
     }
 }
+
+// ─── Import ───────────────────────────────────────────────────────────────────
 
 async function importMail() {
     const rows = document.getElementById("importMailRows")?.value.trim() || "";
@@ -526,11 +578,9 @@ async function importMail() {
     }
 
     try {
-        const res = await fetch("/api/accounts/import-mail", {
+        const res = await adminFetch("/api/accounts/import-mail", {
             method: "POST",
-            headers: {
-                "Content-Type": "application/json"
-            },
+            headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ rows })
         });
 
@@ -549,8 +599,10 @@ async function importMail() {
         await loadAccounts();
         await loadWorkerStatus();
     } catch (err) {
-        console.error("importMail error:", err);
-        alert("Lỗi kết nối server");
+        if (err.message !== "Session expired") {
+            console.error("importMail error:", err);
+            alert("Lỗi kết nối server");
+        }
     }
 }
 
@@ -564,7 +616,7 @@ async function uploadExcelFile() {
     formData.append("file", selectedExcelFile);
 
     try {
-        const res = await fetch("/api/accounts/import-mail-file", {
+        const res = await adminFetch("/api/accounts/import-mail-file", {
             method: "POST",
             body: formData
         });
@@ -576,7 +628,9 @@ async function uploadExcelFile() {
             return;
         }
 
-        alert(`Import file thành công. Created: ${data.created}, Updated: ${data.updated}, Skipped: ${data.skipped}`);
+        alert(
+            `Import file thành công. Created: ${data.created}, Updated: ${data.updated}, Skipped: ${data.skipped}`
+        );
 
         selectedExcelFile = null;
         const fileInput = document.getElementById("excelFileInput");
@@ -586,10 +640,14 @@ async function uploadExcelFile() {
         await loadAccounts();
         await loadWorkerStatus();
     } catch (err) {
-        console.error("uploadExcelFile error:", err);
-        alert("Lỗi kết nối server");
+        if (err.message !== "Session expired") {
+            console.error("uploadExcelFile error:", err);
+            alert("Lỗi kết nối server");
+        }
     }
 }
+
+// ─── Copy ─────────────────────────────────────────────────────────────────────
 
 async function copyText(text, successMessage = "Đã copy") {
     try {
@@ -610,12 +668,10 @@ function fallbackCopyText(text, successMessage = "Đã copy") {
     try {
         const textArea = document.createElement("textarea");
         textArea.value = text;
-
         textArea.style.position = "fixed";
         textArea.style.left = "-999999px";
         textArea.style.top = "-999999px";
         textArea.setAttribute("readonly", "");
-
         document.body.appendChild(textArea);
         textArea.focus();
         textArea.select();
@@ -634,6 +690,56 @@ function fallbackCopyText(text, successMessage = "Đã copy") {
         alert("Copy thất bại");
     }
 }
+
+// ─── IMAP Edit ───────────────────────────────────────────────────────────────
+
+async function editImap(id, currentUser, currentHost) {
+    const host = prompt(
+        "IMAP Host (Gmail: imap.gmail.com)",
+        currentHost || "imap.gmail.com"
+    );
+    if (host === null) return;
+
+    const user = prompt(
+        "IMAP User (thường là email gốc)",
+        currentUser || ""
+    );
+    if (user === null) return;
+
+    const pass = prompt("IMAP Password / App Password (16 ký tự Gmail)");
+    if (!pass) return;
+
+    try {
+        const res = await adminFetch("/api/accounts/update-imap/" + id, {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                imapHost: host.trim(),
+                imapUser: user.trim(),
+                imapPass: pass.trim(),
+                imapPort: 993,
+                imapSecure: true
+            })
+        });
+
+        const data = await safeJson(res);
+
+        if (!res.ok) {
+            alert(data.message || "Cập nhật IMAP thất bại");
+            return;
+        }
+
+        alert("Đã cập nhật IMAP thành công. Worker sẽ dùng thông tin mới ở lần sync tiếp theo.");
+        await loadAccounts();
+    } catch (err) {
+        if (err.message !== "Session expired") {
+            console.error("editImap error:", err);
+            alert("Lỗi kết nối server");
+        }
+    }
+}
+
+// ─── Utils ────────────────────────────────────────────────────────────────────
 
 async function safeJson(res) {
     const text = await res.text();

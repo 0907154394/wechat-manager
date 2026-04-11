@@ -44,11 +44,16 @@ function generateDotVariants(localPart) {
     return Array.from(results);
 }
 
+// POST /api/accounts/create-bulk
+// For Gmail: pass gmailAppPassword to auto-configure IMAP on all variants.
+// All variants share the same IMAP inbox (Gmail ignores dots), so imapUser
+// is set to the BASE email (not the variant) for correct IMAP login.
 router.post("/create-bulk", async (req, res) => {
     try {
         const baseEmail = normalizeEmail(req.body.baseEmail);
         const password = String(req.body.password || "").trim();
         const quantity = Number.parseInt(req.body.quantity, 10);
+        const gmailAppPassword = String(req.body.gmailAppPassword || "").trim();
 
         if (!baseEmail || !baseEmail.includes("@")) {
             return res.status(400).json({ message: "Email gốc không hợp lệ" });
@@ -64,11 +69,15 @@ router.post("/create-bulk", async (req, res) => {
             return res.status(400).json({ message: "Email gốc không hợp lệ" });
         }
 
+        const isGmail =
+            domain === "gmail.com" || domain === "googlemail.com";
+
         const variants = generateDotVariants(localPart);
 
         if (!variants.length) {
             return res.status(400).json({
-                message: "Phần trước @ quá ngắn, không có biến thể dấu chấm để tạo"
+                message:
+                    "Phần trước @ quá ngắn, không có biến thể dấu chấm để tạo"
             });
         }
 
@@ -90,19 +99,33 @@ router.post("/create-bulk", async (req, res) => {
 
             const tokens = buildTokens();
 
-            docsToInsert.push({
+            const doc = {
                 email,
                 password,
                 status: "CHUA BAN",
                 wechatId: "",
                 linkToken: tokens.linkToken,
                 messageToken: tokens.messageToken
-            });
+            };
+
+            // Auto-configure Gmail IMAP if App Password provided
+            if (isGmail && gmailAppPassword) {
+                doc.imapHost = "imap.gmail.com";
+                doc.imapPort = 993;
+                doc.imapSecure = true;
+                // IMPORTANT: Gmail login uses the base email (dots are ignored by Gmail)
+                doc.imapUser = baseEmail;
+                doc.imapPass = gmailAppPassword;
+                doc.imapEnabled = true;
+            }
+
+            docsToInsert.push(doc);
         }
 
         if (!docsToInsert.length) {
             return res.status(400).json({
-                message: "Không còn biến thể mới để tạo hoặc tất cả đã tồn tại"
+                message:
+                    "Không còn biến thể mới để tạo hoặc tất cả đã tồn tại"
             });
         }
 
@@ -159,6 +182,35 @@ router.put("/unsell/:id", async (req, res) => {
         res.json({ message: "updated", data: updated });
     } catch (error) {
         console.error("unsell error:", error);
+        res.status(500).json({ message: error.message });
+    }
+});
+
+router.put("/update-imap/:id", async (req, res) => {
+    try {
+        const imapUser = String(req.body.imapUser || "").trim();
+        const imapPass = String(req.body.imapPass || "").trim();
+        const imapHost = String(req.body.imapHost || "imap.gmail.com").trim();
+        const imapPort = Number(req.body.imapPort || 993);
+        const imapSecure = req.body.imapSecure !== false;
+
+        if (!imapUser || !imapPass) {
+            return res.status(400).json({ message: "Thiếu imapUser hoặc imapPass" });
+        }
+
+        const updated = await Account.findByIdAndUpdate(
+            req.params.id,
+            { imapHost, imapPort, imapSecure, imapUser, imapPass, imapEnabled: true },
+            { new: true }
+        );
+
+        if (!updated) {
+            return res.status(404).json({ message: "Không tìm thấy account" });
+        }
+
+        res.json({ message: "Đã cập nhật IMAP", data: updated });
+    } catch (error) {
+        console.error("update-imap error:", error);
         res.status(500).json({ message: error.message });
     }
 });
@@ -239,7 +291,10 @@ router.post("/import-mail", async (req, res) => {
             return res.status(400).json({ message: "Thiếu dữ liệu import" });
         }
 
-        const lines = rows.split(/\r?\n/).map(x => x.trim()).filter(Boolean);
+        const lines = rows
+            .split(/\r?\n/)
+            .map(x => x.trim())
+            .filter(Boolean);
 
         let created = 0;
         let updated = 0;
@@ -249,8 +304,14 @@ router.post("/import-mail", async (req, res) => {
 
             const email = normalizeEmail(parts[0] || "");
             const password = String(parts[1] || "").trim();
-            const imapHost = String(parts[2] || "").trim();
-            const imapPort = Number(parts[3] || 993);
+            const domain = email.split("@")[1] || "";
+            const isGmail =
+                domain === "gmail.com" || domain === "googlemail.com";
+
+            // Auto-fill Gmail IMAP settings if not provided
+            const imapHost = String(parts[2] || "").trim() ||
+                (isGmail ? "imap.gmail.com" : "");
+            const imapPort = Number(parts[3] || (isGmail ? 993 : 993));
             const imapUser = String(parts[4] || email).trim();
             const imapPass = String(parts[5] || password).trim();
             const secureRaw = String(parts[6] || "true").toLowerCase();
@@ -316,7 +377,10 @@ router.post("/import-mail-file", upload.single("file"), async (req, res) => {
             return res.status(400).json({ message: "File không có dữ liệu" });
         }
 
-        const lines = raw.split(/\r?\n/).map(x => x.trim()).filter(Boolean);
+        const lines = raw
+            .split(/\r?\n/)
+            .map(x => x.trim())
+            .filter(Boolean);
 
         if (lines.length < 2) {
             return res.status(400).json({ message: "File CSV không hợp lệ" });
@@ -341,14 +405,35 @@ router.post("/import-mail-file", upload.single("file"), async (req, res) => {
         for (let i = 1; i < lines.length; i++) {
             const cols = lines[i].split(",").map(x => x.trim());
 
-            const email = normalizeEmail(idx.email >= 0 ? cols[idx.email] : "");
-            const password = String(idx.password >= 0 ? cols[idx.password] : "").trim();
-            const imapHost = String(idx.imapHost >= 0 ? cols[idx.imapHost] : "").trim();
-            const imapPort = Number(idx.imapPort >= 0 ? cols[idx.imapPort] : 993);
-            const imapUser = String(idx.imapUser >= 0 ? cols[idx.imapUser] : email).trim();
-            const imapPass = String(idx.imapPass >= 0 ? cols[idx.imapPass] : password).trim();
-            const secureRaw = String(idx.imapSecure >= 0 ? cols[idx.imapSecure] : "true").toLowerCase();
-            const imapSecure = secureRaw === "true" || secureRaw === "1" || secureRaw === "yes";
+            const email = normalizeEmail(
+                idx.email >= 0 ? cols[idx.email] : ""
+            );
+            const password = String(
+                idx.password >= 0 ? cols[idx.password] : ""
+            ).trim();
+            const domain = email.split("@")[1] || "";
+            const isGmail =
+                domain === "gmail.com" || domain === "googlemail.com";
+
+            const imapHost =
+                String(idx.imapHost >= 0 ? cols[idx.imapHost] : "").trim() ||
+                (isGmail ? "imap.gmail.com" : "");
+            const imapPort = Number(
+                idx.imapPort >= 0 ? cols[idx.imapPort] : (isGmail ? 993 : 993)
+            );
+            const imapUser = String(
+                idx.imapUser >= 0 ? cols[idx.imapUser] : email
+            ).trim();
+            const imapPass = String(
+                idx.imapPass >= 0 ? cols[idx.imapPass] : password
+            ).trim();
+            const secureRaw = String(
+                idx.imapSecure >= 0 ? cols[idx.imapSecure] : "true"
+            ).toLowerCase();
+            const imapSecure =
+                secureRaw === "true" ||
+                secureRaw === "1" ||
+                secureRaw === "yes";
 
             if (!email || !password || !imapHost) {
                 skipped++;

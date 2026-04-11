@@ -3,169 +3,309 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Hộp thư tin nhắn</title>
+    <title>Hộp thư xác thực</title>
     <style>
-        *{box-sizing:border-box}
-        body{
-            margin:0;
-            font-family:Arial,sans-serif;
-            background:#0b1730;
-            color:#fff;
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: Arial, sans-serif;
+            background: #0b1730;
+            color: #fff;
         }
-        .container{
-            width:min(1000px,96%);
-            margin:30px auto;
+        .container {
+            width: min(720px, 96%);
+            margin: 30px auto;
+            padding-bottom: 40px;
         }
-        .card{
-            background:#14274a;
-            border-radius:16px;
-            padding:20px;
-            margin-bottom:20px;
-            box-shadow:0 10px 24px rgba(0,0,0,0.28);
+        .card {
+            background: #14274a;
+            border-radius: 16px;
+            padding: 20px 24px;
+            margin-bottom: 20px;
+            box-shadow: 0 10px 24px rgba(0,0,0,0.28);
         }
-        .message{
-            background:#10213f;
-            border-radius:12px;
-            padding:14px;
-            margin-bottom:12px;
+        h1 {
+            font-size: 20px;
+            margin-bottom: 14px;
+            color: #e2e8f0;
         }
-        .sender{
-            color:#67e8f9;
-            font-weight:bold;
-            margin-bottom:8px;
+        .account-info {
+            font-size: 14px;
+            line-height: 2;
+            color: #cbd5e1;
         }
-        .time{
-            color:#94a3b8;
-            font-size:12px;
-            margin-top:8px;
+        .account-info b { color: #fff; }
+        .status-tag {
+            display: inline-block;
+            padding: 2px 10px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 700;
         }
-        textarea,input{
-            width:100%;
-            box-sizing:border-box;
-            padding:12px;
-            border-radius:10px;
-            border:none;
-            margin-bottom:10px;
-            background:#123a70;
-            color:#fff;
+        .status-tag.sold { background: #166534; color: #bbf7d0; }
+        .status-tag.unsold { background: #1e3a5f; color: #93c5fd; }
+
+        /* Message list */
+        .msg-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 14px;
         }
-        button{
-            padding:10px 16px;
-            border:none;
-            border-radius:10px;
-            background:#2563eb;
-            color:#fff;
-            cursor:pointer;
-            font-weight:700;
+        .msg-header h2 { font-size: 16px; color: #e2e8f0; }
+        .refresh-info {
+            font-size: 12px;
+            color: #64748b;
         }
-        h1,h2{
-            margin-top:0;
+        .message {
+            background: #0f2040;
+            border: 1px solid #1e3a6e;
+            border-radius: 12px;
+            padding: 14px 16px;
+            margin-bottom: 12px;
+        }
+        .message:first-child { border-color: #2563eb; }
+        .msg-subject {
+            font-weight: 700;
+            color: #e2e8f0;
+            margin-bottom: 6px;
+            font-size: 14px;
+        }
+        .msg-sender {
+            color: #67e8f9;
+            font-size: 12px;
+            margin-bottom: 10px;
+        }
+        .msg-content {
+            color: #cbd5e1;
+            font-size: 13px;
+            white-space: pre-wrap;
+            word-break: break-word;
+            max-height: 200px;
+            overflow-y: auto;
+            background: #081526;
+            padding: 10px;
+            border-radius: 8px;
+            font-family: monospace;
+        }
+        /* Highlight 4–8 digit verification codes */
+        .code-highlight {
+            background: #fef08a;
+            color: #1c1917;
+            font-weight: 900;
+            font-size: 15px;
+            padding: 1px 6px;
+            border-radius: 4px;
+            letter-spacing: 2px;
+        }
+        .msg-time {
+            color: #475569;
+            font-size: 11px;
+            margin-top: 8px;
+            text-align: right;
+        }
+        .empty-msg {
+            color: #475569;
+            text-align: center;
+            padding: 30px 0;
+            font-size: 14px;
+        }
+        .copy-code-btn {
+            display: inline-block;
+            margin-left: 8px;
+            padding: 2px 10px;
+            background: #2563eb;
+            color: #fff;
+            border: none;
+            border-radius: 6px;
+            font-size: 12px;
+            cursor: pointer;
+            vertical-align: middle;
+        }
+        .copy-code-btn:active { background: #1d4ed8; }
+
+        /* Auto-refresh bar */
+        .refresh-bar {
+            height: 3px;
+            background: #1e3a6e;
+            border-radius: 2px;
+            overflow: hidden;
+            margin-top: 10px;
+        }
+        .refresh-progress {
+            height: 100%;
+            background: #2563eb;
+            border-radius: 2px;
+            transition: width 1s linear;
+        }
+        .error-box {
+            color: #fca5a5;
+            background: #1a0a0a;
+            border-radius: 10px;
+            padding: 20px;
+            text-align: center;
         }
     </style>
 </head>
 <body>
     <div class="container">
         <div class="card">
-            <h1>Hộp thư tin nhắn</h1>
-            <div id="accountInfo">Đang tải...</div>
+            <h1>Hộp thư xác thực</h1>
+            <div id="accountInfo" class="account-info">Đang tải...</div>
         </div>
 
         <div class="card">
-            <h2>Thêm tin nhắn test</h2>
-            <input id="sender" placeholder="Người gửi">
-            <input id="subject" placeholder="Tiêu đề">
-            <textarea id="content" rows="4" placeholder="Nội dung tin nhắn"></textarea>
-            <button onclick="addMessage()">Gửi tin nhắn test</button>
-        </div>
-
-        <div class="card">
-            <h2>Danh sách tin nhắn</h2>
+            <div class="msg-header">
+                <h2>Tin nhắn</h2>
+                <span class="refresh-info" id="refreshInfo">Tự động làm mới sau <span id="countdown">30</span>s</span>
+            </div>
             <div id="messageList"></div>
+            <div class="refresh-bar">
+                <div class="refresh-progress" id="progressBar" style="width:100%"></div>
+            </div>
         </div>
     </div>
 
     <script>
+        const REFRESH_SEC = 30;
         let currentToken = "";
-        let currentEmail = "";
+        let countdownVal = REFRESH_SEC;
+        let countdownTimer = null;
 
         window.onload = function () {
             const params = new URLSearchParams(window.location.search);
             currentToken = params.get("token") || "";
+
             if (!currentToken) {
-                document.getElementById("accountInfo").innerText = "Thiếu token";
+                document.getElementById("accountInfo").innerHTML =
+                    '<div class="error-box">Link không hợp lệ hoặc đã hết hạn.</div>';
+                document.getElementById("messageList").innerHTML = "";
+                document.getElementById("refreshInfo").style.display = "none";
                 return;
             }
+
             loadMessages();
+            startCountdown();
         };
 
         async function loadMessages() {
-            const res = await fetch("/api/messages/" + encodeURIComponent(currentToken));
-            const data = await res.json();
+            try {
+                const res = await fetch(
+                    "/api/messages/" + encodeURIComponent(currentToken)
+                );
+                const data = await res.json().catch(() => ({}));
 
-            if (!res.ok) {
-                document.getElementById("accountInfo").innerText = data.message || "Không tải được dữ liệu";
-                return;
-            }
+                if (!res.ok) {
+                    document.getElementById("accountInfo").innerHTML =
+                        '<div class="error-box">' +
+                        escapeHtml(data.message || "Không tải được dữ liệu") +
+                        "</div>";
+                    document.getElementById("messageList").innerHTML = "";
+                    return;
+                }
 
-            currentEmail = data.account.email;
+                const acct = data.account || {};
+                const isSold = acct.status === "DA BAN";
 
-            document.getElementById("accountInfo").innerHTML = `
-                Email: <b>${escapeHtml(data.account.email)}</b><br>
-                WeChat ID: <b>${escapeHtml(data.account.wechatId || "-")}</b><br>
-                Trạng thái: <b>${escapeHtml(data.account.status)}</b><br>
-                Token: <b>${escapeHtml(data.account.messageToken)}</b>
-            `;
-
-            let html = "";
-            data.messages.forEach(msg => {
-                html += `
-                    <div class="message">
-                        <div class="sender">${escapeHtml(msg.sender)}</div>
-                        <div><b>${escapeHtml(msg.subject || "(Không có tiêu đề)")}</b></div>
-                        <div>${escapeHtml(msg.content)}</div>
-                        <div class="time">${new Date(msg.createdAt).toLocaleString()}</div>
-                    </div>
+                document.getElementById("accountInfo").innerHTML = `
+                    Email: <b>${escapeHtml(acct.email || "-")}</b><br>
+                    WeChat ID: <b>${escapeHtml(acct.wechatId || "-")}</b><br>
+                    Trạng thái: <span class="status-tag ${isSold ? "sold" : "unsold"}">${escapeHtml(acct.status || "-")}</span>
                 `;
-            });
 
-            document.getElementById("messageList").innerHTML = html || "Chưa có tin nhắn nào.";
+                const msgs = Array.isArray(data.messages) ? data.messages : [];
+
+                if (!msgs.length) {
+                    document.getElementById("messageList").innerHTML =
+                        '<div class="empty-msg">Chưa có tin nhắn nào.<br>Tin nhắn sẽ xuất hiện sau khi bạn đăng ký WeChat.</div>';
+                    return;
+                }
+
+                let html = "";
+                msgs.forEach(function (msg) {
+                    const highlighted = highlightCode(escapeHtml(msg.content || ""));
+                    const code = extractCode(msg.content || "");
+                    html += `
+                        <div class="message">
+                            <div class="msg-subject">${escapeHtml(msg.subject || "(Không có tiêu đề)")}</div>
+                            <div class="msg-sender">Từ: ${escapeHtml(msg.sender || "-")}</div>
+                            <div class="msg-content">${highlighted}</div>
+                            ${code ? `<div style="margin-top:10px;font-size:13px;color:#94a3b8">
+                                Mã xác thực: <span class="code-highlight">${escapeHtml(code)}</span>
+                                <button class="copy-code-btn" onclick="copyCode('${escapeJs(code)}')">Copy mã</button>
+                            </div>` : ""}
+                            <div class="msg-time">${new Date(msg.createdAt).toLocaleString("vi-VN")}</div>
+                        </div>
+                    `;
+                });
+
+                document.getElementById("messageList").innerHTML = html;
+            } catch (e) {
+                console.error("loadMessages error:", e);
+            }
         }
 
-        async function addMessage() {
-            const sender = document.getElementById("sender").value.trim();
-            const subject = document.getElementById("subject").value.trim();
-            const content = document.getElementById("content").value.trim();
-
-            if (!currentEmail || !content) {
-                alert("Thiếu dữ liệu");
-                return;
-            }
-
-            const res = await fetch("/api/messages/add-test", {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/json"
-                },
-                body: JSON.stringify({
-                    email: currentEmail,
-                    sender: sender || "System",
-                    subject,
-                    content
-                })
-            });
-
-            const data = await res.json();
-
-            if (!res.ok) {
-                alert(data.message || "Lỗi");
-                return;
-            }
-
-            document.getElementById("sender").value = "";
-            document.getElementById("subject").value = "";
-            document.getElementById("content").value = "";
-            loadMessages();
+        // Extract the most likely verification code (4–8 consecutive digits)
+        function extractCode(text) {
+            const match = text.match(/\b(\d{4,8})\b/);
+            return match ? match[1] : "";
         }
+
+        // Wrap digit sequences (4-8 digits) in highlight spans
+        function highlightCode(htmlText) {
+            return htmlText.replace(/\b(\d{4,8})\b/g, function (m) {
+                return '<span class="code-highlight">' + m + "</span>";
+            });
+        }
+
+        function copyCode(code) {
+            if (navigator.clipboard && window.isSecureContext) {
+                navigator.clipboard.writeText(code).then(function () {
+                    alert("Đã copy mã: " + code);
+                });
+            } else {
+                // fallback
+                const ta = document.createElement("textarea");
+                ta.value = code;
+                ta.style.position = "fixed";
+                ta.style.left = "-9999px";
+                document.body.appendChild(ta);
+                ta.select();
+                document.execCommand("copy");
+                document.body.removeChild(ta);
+                alert("Đã copy mã: " + code);
+            }
+        }
+
+        // ── Countdown & auto-refresh ──────────────────────────────────────────
+
+        function startCountdown() {
+            countdownVal = REFRESH_SEC;
+            updateCountdownUI();
+
+            countdownTimer = setInterval(function () {
+                countdownVal--;
+
+                if (countdownVal <= 0) {
+                    countdownVal = REFRESH_SEC;
+                    loadMessages();
+                }
+
+                updateCountdownUI();
+            }, 1000);
+        }
+
+        function updateCountdownUI() {
+            const el = document.getElementById("countdown");
+            if (el) el.textContent = countdownVal;
+
+            const bar = document.getElementById("progressBar");
+            if (bar) {
+                const pct = (countdownVal / REFRESH_SEC) * 100;
+                bar.style.width = pct + "%";
+            }
+        }
+
+        // ── Utils ─────────────────────────────────────────────────────────────
 
         function escapeHtml(value) {
             return String(value)
@@ -174,6 +314,15 @@
                 .replaceAll(">", "&gt;")
                 .replaceAll('"', "&quot;")
                 .replaceAll("'", "&#039;");
+        }
+
+        function escapeJs(value) {
+            return String(value)
+                .replaceAll("\\", "\\\\")
+                .replaceAll("'", "\\'")
+                .replaceAll('"', '\\"')
+                .replaceAll("\n", "\\n")
+                .replaceAll("\r", "\\r");
         }
     </script>
 </body>
