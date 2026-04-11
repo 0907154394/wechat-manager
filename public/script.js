@@ -691,35 +691,46 @@ function fallbackCopyText(text, successMessage = "Đã copy") {
     }
 }
 
-// ─── IMAP Edit ───────────────────────────────────────────────────────────────
+// ─── IMAP Modal ──────────────────────────────────────────────────────────────
 
-async function editImap(id, currentUser, currentHost) {
-    const host = prompt(
-        "IMAP Host (Gmail: imap.gmail.com)",
-        currentHost || "imap.gmail.com"
-    );
-    if (host === null) return;
+let _imapTargetId = "";
 
-    const user = prompt(
-        "IMAP User (thường là email gốc)",
-        currentUser || ""
-    );
-    if (user === null) return;
+function editImap(id, currentUser, currentHost) {
+    _imapTargetId = id;
 
-    const pass = prompt("IMAP Password / App Password (16 ký tự Gmail)");
-    if (!pass) return;
+    const modal = document.getElementById("imapModal");
+    document.getElementById("mi_host").value = currentHost || "imap.gmail.com";
+    document.getElementById("mi_user").value = currentUser || "";
+    document.getElementById("mi_pass").value = "";
+
+    modal.style.display = "flex";
+    setTimeout(() => document.getElementById("mi_pass").focus(), 80);
+}
+
+function closeImapModal() {
+    document.getElementById("imapModal").style.display = "none";
+    _imapTargetId = "";
+}
+
+async function saveImap() {
+    const host = document.getElementById("mi_host").value.trim();
+    const user = document.getElementById("mi_user").value.trim();
+    const pass = document.getElementById("mi_pass").value.trim();
+
+    if (!host || !user || !pass) {
+        document.getElementById("mi_pass").style.borderColor = "#ef4444";
+        return;
+    }
+
+    const btn = document.getElementById("imapSaveBtn");
+    btn.disabled = true;
+    btn.textContent = "Đang lưu...";
 
     try {
-        const res = await adminFetch("/api/accounts/update-imap/" + id, {
+        const res = await adminFetch("/api/accounts/update-imap/" + _imapTargetId, {
             method: "PUT",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-                imapHost: host.trim(),
-                imapUser: user.trim(),
-                imapPass: pass.trim(),
-                imapPort: 993,
-                imapSecure: true
-            })
+            body: JSON.stringify({ imapHost: host, imapUser: user, imapPass: pass, imapPort: 993, imapSecure: true })
         });
 
         const data = await safeJson(res);
@@ -729,13 +740,16 @@ async function editImap(id, currentUser, currentHost) {
             return;
         }
 
-        alert("Đã cập nhật IMAP thành công. Worker sẽ dùng thông tin mới ở lần sync tiếp theo.");
+        closeImapModal();
         await loadAccounts();
     } catch (err) {
         if (err.message !== "Session expired") {
-            console.error("editImap error:", err);
+            console.error("saveImap error:", err);
             alert("Lỗi kết nối server");
         }
+    } finally {
+        btn.disabled = false;
+        btn.textContent = "Lưu";
     }
 }
 
