@@ -1,6 +1,6 @@
 {
   "name": "wechat-manager",
-  "version": "1.2.6",
+  "version": "1.2.7",
   "main": "electron-main.js",
   "scripts": {
     "start": "node server.js",

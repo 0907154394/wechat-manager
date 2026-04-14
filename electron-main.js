@@ -211,47 +211,63 @@ function setupAutoUpdater() {
     }, 10000);
 }
 
-// ── App lifecycle ─────────────────────────────────────────────────────────
-app.whenReady().then(async () => {
-    // 1. Kiểm tra port 3000 — nếu bị chiếm thì báo và thoát
-    const free = await isPortFree(PORT);
-    if (!free) {
-        dialog.showErrorBox(
-            "Cổng đang bận",
-            `Cổng ${PORT} đang được dùng bởi ứng dụng khác.\n\nKiểm tra xem WeChat Manager có đang chạy rồi không,\nhoặc đổi PORT trong file .env.`
-        );
-        app.quit();
-        return;
-    }
+// ── Single instance lock ──────────────────────────────────────────────────
+// Nếu app đã chạy rồi: instance mới tắt ngay, cửa sổ cũ lên focus
+const gotLock = app.requestSingleInstanceLock();
 
-    // 2. Khởi động server
-    startServer();
-
-    // 3. Sau 9 giây kiểm tra MongoDB — nếu lỗi thì hiện dialog cảnh báo
-    setTimeout(() => {
-        const status = global._mongoStatus || "";
-        if (status.startsWith("failed")) {
-            const errMsg = status.replace("failed:", "").trim();
-            dialog.showMessageBox({
-                type: "error",
-                title: "Lỗi kết nối Database",
-                message: "Không kết nối được MongoDB!",
-                detail: `${errMsg}\n\nKiểm tra:\n• File .env có đúng MONGO_URI không\n• MongoDB có đang chạy không (Services → MongoDB)`
-            });
+if (!gotLock) {
+    app.quit();
+} else {
+    app.on("second-instance", () => {
+        if (mainWindow) {
+            if (!mainWindow.isVisible()) mainWindow.show();
+            if (mainWindow.isMinimized()) mainWindow.restore();
+            mainWindow.focus();
         }
-    }, 9000);
+    });
 
-    // 4. Khởi động tunnel + cửa sổ + tray
-    startTunnel();
-    createWindow();
-    createTray();
+    // ── App lifecycle ─────────────────────────────────────────────────────
+    app.whenReady().then(async () => {
+        // 1. Kiểm tra port — chỉ trigger khi app khác (không phải instance của mình) chiếm cổng
+        const free = await isPortFree(PORT);
+        if (!free) {
+            dialog.showErrorBox(
+                "Cổng đang bận",
+                `Cổng ${PORT} đang được dùng bởi ứng dụng khác.\n\nKiểm tra xem WeChat Manager có đang chạy rồi không,\nhoặc đổi PORT trong file .env.`
+            );
+            app.quit();
+            return;
+        }
 
-    // 5. Kiểm tra update
-    setupAutoUpdater();
-});
+        // 2. Khởi động server
+        startServer();
 
-// Không thoát khi đóng cửa sổ (đã handle ở mainWindow close event)
-app.on("window-all-closed", () => { /* keep alive in tray */ });
+        // 3. Sau 9 giây kiểm tra MongoDB — nếu lỗi thì hiện dialog cảnh báo
+        setTimeout(() => {
+            const status = global._mongoStatus || "";
+            if (status.startsWith("failed")) {
+                const errMsg = status.replace("failed:", "").trim();
+                dialog.showMessageBox({
+                    type: "error",
+                    title: "Lỗi kết nối Database",
+                    message: "Không kết nối được MongoDB!",
+                    detail: `${errMsg}\n\nKiểm tra:\n• File .env có đúng MONGO_URI không\n• MongoDB có đang chạy không (Services → MongoDB)`
+                });
+            }
+        }, 9000);
+
+        // 4. Khởi động tunnel + cửa sổ + tray
+        startTunnel();
+        createWindow();
+        createTray();
+
+        // 5. Kiểm tra update
+        setupAutoUpdater();
+    });
+
+    // Không thoát khi đóng cửa sổ (đã handle ở mainWindow close event)
+    app.on("window-all-closed", () => { /* keep alive in tray */ });
+}
 
 app.on("before-quit", () => {
     if (cfProcess) cfProcess.kill();
