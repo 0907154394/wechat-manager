@@ -101,13 +101,22 @@ function createWindow() {
         show: false
     });
 
-    // Thử load, retry nếu server chưa sẵn sàng
-    const load = (attempt = 0) => {
-        mainWindow.loadURL(`http://localhost:${PORT}`).catch(() => {
-            if (attempt < 40) setTimeout(() => load(attempt + 1), 300);
+    // Hiện splash ngay, không đợi server
+    mainWindow.loadFile(path.join(__dirname, "splash.html")).catch(() => {});
+
+    // Poll đến khi server lắng nghe, rồi navigate
+    const waitForServer = (attempt = 0) => {
+        isPortFree(PORT).then(free => {
+            if (!free) {
+                mainWindow.loadURL(`http://localhost:${PORT}`).catch(() => {});
+            } else if (attempt < 80) {
+                setTimeout(() => waitForServer(attempt + 1), 200);
+            }
+        }).catch(() => {
+            if (attempt < 80) setTimeout(() => waitForServer(attempt + 1), 200);
         });
     };
-    setTimeout(() => load(), 300);
+    setTimeout(() => waitForServer(), 150);
 
     mainWindow.once("ready-to-show", () => {
         mainWindow.show();
@@ -165,7 +174,20 @@ function setupAutoUpdater() {
         });
     });
 
+    // Thanh tiến trình trên taskbar icon (Windows native)
+    autoUpdater.on("download-progress", progress => {
+        const pct = Math.round(progress.percent);
+        if (mainWindow) {
+            mainWindow.setProgressBar(progress.percent / 100);
+            mainWindow.setTitle(`WeChat Manager — Đang tải cập nhật: ${pct}%`);
+        }
+    });
+
     autoUpdater.on("update-downloaded", info => {
+        if (mainWindow) {
+            mainWindow.setProgressBar(-1);   // xoá progress bar
+            mainWindow.setTitle("WeChat Manager");
+        }
         dialog.showMessageBox({
             type: "info",
             title: `Cập nhật ${info.version} sẵn sàng`,
