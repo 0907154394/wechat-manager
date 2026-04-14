@@ -3,327 +3,550 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Hộp thư xác thực</title>
+    <title>Tin nhắn xác thực</title>
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body {
-            font-family: Arial, sans-serif;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
             background: #0b1730;
             color: #fff;
+            min-height: 100vh;
         }
         .container {
-            width: min(720px, 96%);
-            margin: 30px auto;
-            padding-bottom: 40px;
+            width: min(680px, 96%);
+            margin: 0 auto;
+            padding: 28px 0 48px;
         }
-        .card {
-            background: #14274a;
-            border-radius: 16px;
-            padding: 20px 24px;
-            margin-bottom: 20px;
-            box-shadow: 0 10px 24px rgba(0,0,0,0.28);
-        }
-        h1 {
-            font-size: 20px;
-            margin-bottom: 14px;
-            color: #e2e8f0;
-        }
-        .account-info {
-            font-size: 14px;
-            line-height: 2;
-            color: #cbd5e1;
-        }
-        .account-info b { color: #fff; }
-        .status-tag {
-            display: inline-block;
-            padding: 2px 10px;
-            border-radius: 20px;
-            font-size: 12px;
-            font-weight: 700;
-        }
-        .status-tag.sold { background: #166534; color: #bbf7d0; }
-        .status-tag.unsold { background: #1e3a5f; color: #93c5fd; }
 
-        /* Message list */
-        .msg-header {
+        /* Header */
+        .page-header {
             display: flex;
             align-items: center;
             justify-content: space-between;
-            margin-bottom: 14px;
+            margin-bottom: 20px;
         }
-        .msg-header h2 { font-size: 16px; color: #e2e8f0; }
+        .page-title {
+            font-size: 17px;
+            font-weight: 700;
+            color: #e2e8f0;
+            letter-spacing: 0.2px;
+        }
         .refresh-info {
             font-size: 12px;
-            color: #64748b;
+            color: #475569;
+            display: flex;
+            align-items: center;
+            gap: 10px;
         }
+        .countdown-num {
+            color: #60a5fa;
+            font-weight: 700;
+        }
+        .reload-btn {
+            padding: 5px 12px;
+            background: #1e3a6e;
+            color: #93c5fd;
+            border: 1px solid #2563eb44;
+            border-radius: 6px;
+            font-size: 12px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background .15s;
+            white-space: nowrap;
+        }
+        .reload-btn:hover { background: #2563eb; color: #fff; }
+        .reload-btn:active { background: #1d4ed8; }
+        .reload-btn.spinning { opacity: .6; pointer-events: none; }
+
+        /* Progress bar */
+        .refresh-bar {
+            height: 2px;
+            background: #1e3a6e;
+            border-radius: 2px;
+            overflow: hidden;
+            margin-bottom: 20px;
+        }
+        .refresh-progress {
+            height: 100%;
+            background: linear-gradient(90deg, #2563eb, #60a5fa);
+            border-radius: 2px;
+            transition: width 1s linear;
+        }
+
+        /* Message card */
         .message {
-            background: #0f2040;
+            background: #111f3d;
             border: 1px solid #1e3a6e;
-            border-radius: 12px;
-            padding: 14px 16px;
+            border-radius: 14px;
+            padding: 18px 20px;
+            margin-bottom: 14px;
+            transition: border-color .2s;
+        }
+        .message:first-child {
+            border-color: #3b82f6;
+        }
+        .message:hover {
+            border-color: #2563eb;
+        }
+
+        .msg-meta {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 12px;
             margin-bottom: 12px;
         }
-        .message:first-child { border-color: #2563eb; }
+        .msg-info { flex: 1; min-width: 0; }
         .msg-subject {
             font-weight: 700;
             color: #e2e8f0;
-            margin-bottom: 6px;
             font-size: 14px;
+            margin-bottom: 4px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
         }
         .msg-sender {
             color: #67e8f9;
             font-size: 12px;
-            margin-bottom: 10px;
-        }
-        .msg-content {
-            color: #cbd5e1;
-            font-size: 13px;
-            white-space: pre-wrap;
-            word-break: break-word;
-            max-height: 200px;
-            overflow-y: auto;
-            background: #081526;
-            padding: 10px;
-            border-radius: 8px;
-            font-family: monospace;
-        }
-        /* Highlight 4–8 digit verification codes */
-        .code-highlight {
-            background: #fef08a;
-            color: #1c1917;
-            font-weight: 900;
-            font-size: 15px;
-            padding: 1px 6px;
-            border-radius: 4px;
-            letter-spacing: 2px;
         }
         .msg-time {
             color: #475569;
             font-size: 11px;
-            margin-top: 8px;
-            text-align: right;
+            white-space: nowrap;
+            flex-shrink: 0;
+            margin-top: 1px;
         }
-        .empty-msg {
-            color: #475569;
-            text-align: center;
-            padding: 30px 0;
-            font-size: 14px;
+
+        /* Code highlight box */
+        .code-box {
+            background: linear-gradient(135deg, #1e3a6e 0%, #162d55 100%);
+            border: 1px solid #2563eb;
+            border-radius: 10px;
+            padding: 12px 16px;
+            margin-bottom: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+        }
+        .code-label {
+            font-size: 11px;
+            color: #93c5fd;
+            text-transform: uppercase;
+            letter-spacing: 0.8px;
+            font-weight: 600;
+            margin-bottom: 4px;
+        }
+        .code-value {
+            font-size: 26px;
+            font-weight: 900;
+            color: #fef08a;
+            letter-spacing: 6px;
+            font-family: "Courier New", monospace;
+            line-height: 1;
         }
         .copy-code-btn {
-            display: inline-block;
-            margin-left: 8px;
-            padding: 2px 10px;
+            padding: 8px 18px;
             background: #2563eb;
             color: #fff;
             border: none;
-            border-radius: 6px;
-            font-size: 12px;
+            border-radius: 8px;
+            font-size: 13px;
+            font-weight: 600;
             cursor: pointer;
-            vertical-align: middle;
+            white-space: nowrap;
+            transition: background .15s;
+            flex-shrink: 0;
         }
-        .copy-code-btn:active { background: #1d4ed8; }
+        .copy-code-btn:hover { background: #1d4ed8; }
+        .copy-code-btn:active { background: #1e40af; }
+        .copy-code-btn.copied {
+            background: #16a34a;
+        }
 
-        /* Auto-refresh bar */
-        .refresh-bar {
-            height: 3px;
-            background: #1e3a6e;
-            border-radius: 2px;
-            overflow: hidden;
-            margin-top: 10px;
+        /* Email body */
+        .msg-body {
+            color: #94a3b8;
+            font-size: 12.5px;
+            line-height: 1.65;
+            background: #081526;
+            padding: 12px 14px;
+            border-radius: 8px;
+            max-height: 180px;
+            overflow-y: auto;
+            word-break: break-word;
+            white-space: pre-wrap;
         }
-        .refresh-progress {
-            height: 100%;
-            background: #2563eb;
-            border-radius: 2px;
-            transition: width 1s linear;
+        .msg-body::-webkit-scrollbar { width: 4px; }
+        .msg-body::-webkit-scrollbar-track { background: transparent; }
+        .msg-body::-webkit-scrollbar-thumb { background: #1e3a6e; border-radius: 2px; }
+
+        /* Inline code highlight within body text */
+        .code-inline {
+            background: #fef08a22;
+            color: #fde68a;
+            font-weight: 700;
+            padding: 0 3px;
+            border-radius: 3px;
+        }
+
+        /* Empty / error states */
+        .empty-msg {
+            text-align: center;
+            padding: 48px 0 32px;
+            color: #475569;
+            font-size: 14px;
+        }
+        .empty-icon {
+            font-size: 36px;
+            margin-bottom: 12px;
+            opacity: .4;
         }
         .error-box {
-            color: #fca5a5;
             background: #1a0a0a;
-            border-radius: 10px;
-            padding: 20px;
+            border: 1px solid #7f1d1d;
+            border-radius: 12px;
+            padding: 24px;
             text-align: center;
+            color: #fca5a5;
+            font-size: 14px;
+        }
+
+        /* Toast */
+        #toast {
+            position: fixed;
+            bottom: 24px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: #16a34a;
+            color: #fff;
+            padding: 9px 20px;
+            border-radius: 20px;
+            font-size: 13px;
+            font-weight: 600;
+            z-index: 9999;
+            opacity: 0;
+            transition: opacity .3s;
+            pointer-events: none;
+            white-space: nowrap;
         }
     </style>
 </head>
 <body>
-    <div class="container">
-        <div class="card">
-            <h1>Hộp thư xác thực</h1>
-            <div id="accountInfo" class="account-info">Đang tải...</div>
-        </div>
+<div class="container">
 
-        <div class="card">
-            <div class="msg-header">
-                <h2>Tin nhắn</h2>
-                <span class="refresh-info" id="refreshInfo">Tự động làm mới sau <span id="countdown">30</span>s</span>
-            </div>
-            <div id="messageList"></div>
-            <div class="refresh-bar">
-                <div class="refresh-progress" id="progressBar" style="width:100%"></div>
-            </div>
+    <div class="page-header">
+        <div class="page-title">Tin nhắn đang chờ</div>
+        <div class="refresh-info">
+            <span>Làm mới sau <span class="countdown-num" id="countdown">30</span>s</span>
+            <button class="reload-btn" id="reloadBtn" onclick="manualReload()">&#8635; Tải lại</button>
         </div>
     </div>
 
-    <script>
-        const REFRESH_SEC = 30;
-        let currentToken = "";
-        let countdownVal = REFRESH_SEC;
-        let countdownTimer = null;
+    <div class="refresh-bar">
+        <div class="refresh-progress" id="progressBar" style="width:100%"></div>
+    </div>
 
-        window.onload = function () {
-            const params = new URLSearchParams(window.location.search);
-            currentToken = params.get("token") || "";
+    <div id="messageList"></div>
 
-            if (!currentToken) {
-                document.getElementById("accountInfo").innerHTML =
-                    '<div class="error-box">Link không hợp lệ hoặc đã hết hạn.</div>';
-                document.getElementById("messageList").innerHTML = "";
-                document.getElementById("refreshInfo").style.display = "none";
+</div>
+
+<div id="toast"></div>
+
+<script>
+    const REFRESH_SEC = 30;
+    let currentToken = "";
+    let countdownVal = REFRESH_SEC;
+    let countdownTimer = null;
+
+    window.onload = function () {
+        const params = new URLSearchParams(window.location.search);
+        currentToken = params.get("token") || "";
+
+        if (!currentToken) {
+            document.getElementById("messageList").innerHTML =
+                '<div class="error-box">Link không hợp lệ hoặc đã hết hạn.</div>';
+            document.getElementById("countdown").closest(".refresh-info").style.display = "none";
+            return;
+        }
+
+        loadMessages();
+        startCountdown();
+    };
+
+    async function loadMessages() {
+        try {
+            const res = await fetch("/api/messages/" + encodeURIComponent(currentToken));
+            const data = await res.json().catch(() => ({}));
+
+            if (!res.ok) {
+                document.getElementById("messageList").innerHTML =
+                    '<div class="error-box">' + escapeHtml(data.message || "Không tải được dữ liệu") + "</div>";
                 return;
             }
 
-            loadMessages();
-            startCountdown();
+            const msgs = Array.isArray(data.messages) ? data.messages : [];
+
+            if (!msgs.length) {
+                document.getElementById("messageList").innerHTML =
+                    '<div class="empty-msg"><div class="empty-icon">&#9993;</div>Chưa có tin nhắn nào.</div>';
+                return;
+            }
+
+            let html = "";
+            msgs.forEach(function (msg) {
+                const cleanContent = cleanEmailContent(msg.content || "");
+                const code = extractCode(msg.content || "");
+                const bodyHtml = highlightCode(escapeHtml(cleanContent));
+                const timeStr = new Date(msg.createdAt).toLocaleString("vi-VN");
+
+                html += '<div class="message">';
+
+                // Meta row
+                html += '<div class="msg-meta">';
+                html += '<div class="msg-info">';
+                html += '<div class="msg-subject">' + escapeHtml(msg.subject || "(Không có tiêu đề)") + '</div>';
+                html += '<div class="msg-sender">Từ: ' + escapeHtml(msg.sender || "-") + '</div>';
+                html += '</div>';
+                html += '<div class="msg-time">' + timeStr + '</div>';
+                html += '</div>';
+
+                // Code box (only if code found)
+                if (code) {
+                    html += '<div class="code-box">';
+                    html += '<div>';
+                    html += '<div class="code-label">Mã xác thực</div>';
+                    html += '<div class="code-value">' + escapeHtml(code) + '</div>';
+                    html += '</div>';
+                    html += '<button class="copy-code-btn" onclick="copyCode(this, \'' + escapeJs(code) + '\')">Copy mã</button>';
+                    html += '</div>';
+                }
+
+                // Email body
+                html += '<div class="msg-body">' + bodyHtml + '</div>';
+
+                html += '</div>';
+            });
+
+            document.getElementById("messageList").innerHTML = html;
+        } catch (e) {
+            console.error("loadMessages error:", e);
+        }
+    }
+
+    // Parse folded MIME headers → { contentType, encoding }
+    function parseMimeHeaders(headerBlock) {
+        const unfolded = headerBlock.replace(/\r?\n[ \t]+/g, " ");
+        const ctM  = unfolded.match(/Content-Type:\s*([^\s;]+)/i);
+        const cteM = unfolded.match(/Content-Transfer-Encoding:\s*(\S+)/i);
+        const bndM = unfolded.match(/boundary\s*=\s*["']?([^"'\r\n;]+)/i);
+        return {
+            contentType: ctM  ? ctM[1].toLowerCase()  : "",
+            encoding:    cteM ? cteM[1].toLowerCase()  : "7bit",
+            boundary:    bndM ? bndM[1].trim().replace(/["']/g, "") : ""
+        };
+    }
+
+    function decodeMimePart(body, encoding) {
+        if (encoding === "base64") {
+            try { return atob(body.replace(/\s/g, "")); } catch { return body; }
+        }
+        if (encoding === "quoted-printable") {
+            return body.replace(/=\r?\n/g, "")
+                       .replace(/=([0-9A-Fa-f]{2})/g, (_, h) => String.fromCharCode(parseInt(h, 16)));
+        }
+        return body;
+    }
+
+    // Rescue raw MIME multipart content (content saved before server-side fix)
+    function rescueMime(text) {
+        // Detect MIME boundary in content
+        const bndMatch = text.match(/boundary\s*=\s*["']?([^"'\r\n;]{4,})/i)
+                      || text.match(/^-{4,}([^\r\n]+)/m);
+        const boundary = bndMatch ? bndMatch[1].trim().replace(/["']/g, "") : null;
+
+        if (boundary) {
+            const escaped = boundary.replace(/[.*+?^${}()|[\]\\-]/g, "\\$&");
+            const parts = text.split(new RegExp(`\r?\n?--${escaped}(?:--)?[ \t]*\r?\n`, "g")).slice(1);
+            let htmlFallback = "";
+
+            for (const part of parts) {
+                const blankIdx = part.search(/\r?\n\r?\n/);
+                if (blankIdx < 0) continue;
+                const { contentType, encoding } = parseMimeHeaders(part.substring(0, blankIdx));
+                const body = part.substring(blankIdx).replace(/^\r?\n|\r?\n$/, "").trim();
+                if (!body) continue;
+
+                if (contentType === "text/plain") {
+                    const decoded = decodeMimePart(body, encoding).trim();
+                    if (decoded) return decoded;
+                }
+                if (contentType === "text/html" && !htmlFallback) {
+                    htmlFallback = decodeMimePart(body, encoding)
+                        .replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
+                }
+            }
+            if (htmlFallback) return htmlFallback;
+        }
+
+        return null;
+    }
+
+    // Clean email content: handle garbled/raw MIME stored in DB, then normalize whitespace
+    function cleanEmailContent(text) {
+        if (!text) return "";
+
+        // 1. Try full MIME rescue if content looks like raw MIME
+        if (/^-{4,}/m.test(text) || /^Content-Type:/im.test(text)) {
+            const rescued = rescueMime(text);
+            if (rescued) text = rescued;
+        }
+
+        // 2. Strip residual Content-* header lines and continuation lines
+        text = text.replace(/^Content-[^\n]+\n/gim, "")
+                   .replace(/^[ \t]+[^\n]+\n/gm, match =>
+                       /["';=]/.test(match) ? "" : match  // Remove parameter continuation lines
+                   ).trim();
+
+        // 3. If still looks like raw base64, decode
+        const base64Block = text.replace(/\s/g, "");
+        if (base64Block.length > 60 && /^[A-Za-z0-9+/]+=*$/.test(base64Block)) {
+            try {
+                const decoded = atob(base64Block);
+                if (/[\x20-\x7E]/.test(decoded)) {
+                    text = decoded;
+                }
+            } catch {}
+        }
+
+        // 4. Strip HTML tags
+        if (/<[a-z][^>]*>/i.test(text)) {
+            text = text.replace(/<[^>]+>/g, " ");
+        }
+
+        // 5. Normalize whitespace
+        const lines = text.split(/\r?\n/);
+        const cleaned = [];
+        let blankRun = 0;
+        for (const line of lines) {
+            const t = line.trimEnd();
+            if (!t.trim()) {
+                blankRun++;
+                if (blankRun <= 1) cleaned.push("");
+            } else {
+                blankRun = 0;
+                cleaned.push(t.trimStart());
+            }
+        }
+        while (cleaned.length && !cleaned[0].trim()) cleaned.shift();
+        while (cleaned.length && !cleaned[cleaned.length - 1].trim()) cleaned.pop();
+        return cleaned.join("\n");
+    }
+
+    // Extract most likely verification code (4–8 consecutive digits)
+    function extractCode(text) {
+        const match = text.match(/\b(\d{4,8})\b/);
+        return match ? match[1] : "";
+    }
+
+    // Wrap digit sequences (4–8 digits) in inline highlight spans
+    function highlightCode(htmlText) {
+        return htmlText.replace(/\b(\d{4,8})\b/g, function (m) {
+            return '<span class="code-inline">' + m + "</span>";
+        });
+    }
+
+    function copyCode(btn, code) {
+        const write = function () {
+            btn.textContent = "Đã copy!";
+            btn.classList.add("copied");
+            showToast("Đã copy mã: " + code);
+            setTimeout(function () {
+                btn.textContent = "Copy mã";
+                btn.classList.remove("copied");
+            }, 2000);
         };
 
-        async function loadMessages() {
-            try {
-                const res = await fetch(
-                    "/api/messages/" + encodeURIComponent(currentToken)
-                );
-                const data = await res.json().catch(() => ({}));
-
-                if (!res.ok) {
-                    document.getElementById("accountInfo").innerHTML =
-                        '<div class="error-box">' +
-                        escapeHtml(data.message || "Không tải được dữ liệu") +
-                        "</div>";
-                    document.getElementById("messageList").innerHTML = "";
-                    return;
-                }
-
-                const acct = data.account || {};
-                const isSold = acct.status === "DA BAN";
-
-                document.getElementById("accountInfo").innerHTML = `
-                    Email: <b>${escapeHtml(acct.email || "-")}</b><br>
-                    WeChat ID: <b>${escapeHtml(acct.wechatId || "-")}</b><br>
-                    Trạng thái: <span class="status-tag ${isSold ? "sold" : "unsold"}">${escapeHtml(acct.status || "-")}</span>
-                `;
-
-                const msgs = Array.isArray(data.messages) ? data.messages : [];
-
-                if (!msgs.length) {
-                    document.getElementById("messageList").innerHTML =
-                        '<div class="empty-msg">Chưa có tin nhắn nào.<br>Tin nhắn sẽ xuất hiện sau khi bạn đăng ký WeChat.</div>';
-                    return;
-                }
-
-                let html = "";
-                msgs.forEach(function (msg) {
-                    const highlighted = highlightCode(escapeHtml(msg.content || ""));
-                    const code = extractCode(msg.content || "");
-                    html += `
-                        <div class="message">
-                            <div class="msg-subject">${escapeHtml(msg.subject || "(Không có tiêu đề)")}</div>
-                            <div class="msg-sender">Từ: ${escapeHtml(msg.sender || "-")}</div>
-                            <div class="msg-content">${highlighted}</div>
-                            ${code ? `<div style="margin-top:10px;font-size:13px;color:#94a3b8">
-                                Mã xác thực: <span class="code-highlight">${escapeHtml(code)}</span>
-                                <button class="copy-code-btn" onclick="copyCode('${escapeJs(code)}')">Copy mã</button>
-                            </div>` : ""}
-                            <div class="msg-time">${new Date(msg.createdAt).toLocaleString("vi-VN")}</div>
-                        </div>
-                    `;
-                });
-
-                document.getElementById("messageList").innerHTML = html;
-            } catch (e) {
-                console.error("loadMessages error:", e);
-            }
+        if (navigator.clipboard && window.isSecureContext) {
+            navigator.clipboard.writeText(code).then(write).catch(fallback);
+        } else {
+            fallback();
         }
 
-        // Extract the most likely verification code (4–8 consecutive digits)
-        function extractCode(text) {
-            const match = text.match(/\b(\d{4,8})\b/);
-            return match ? match[1] : "";
+        function fallback() {
+            const ta = document.createElement("textarea");
+            ta.value = code;
+            ta.style.cssText = "position:fixed;left:-9999px;top:-9999px";
+            document.body.appendChild(ta);
+            ta.select();
+            try { document.execCommand("copy"); write(); } catch {}
+            document.body.removeChild(ta);
         }
+    }
 
-        // Wrap digit sequences (4-8 digits) in highlight spans
-        function highlightCode(htmlText) {
-            return htmlText.replace(/\b(\d{4,8})\b/g, function (m) {
-                return '<span class="code-highlight">' + m + "</span>";
-            });
-        }
-
-        function copyCode(code) {
-            if (navigator.clipboard && window.isSecureContext) {
-                navigator.clipboard.writeText(code).then(function () {
-                    alert("Đã copy mã: " + code);
-                });
-            } else {
-                // fallback
-                const ta = document.createElement("textarea");
-                ta.value = code;
-                ta.style.position = "fixed";
-                ta.style.left = "-9999px";
-                document.body.appendChild(ta);
-                ta.select();
-                document.execCommand("copy");
-                document.body.removeChild(ta);
-                alert("Đã copy mã: " + code);
-            }
-        }
-
-        // ── Countdown & auto-refresh ──────────────────────────────────────────
-
-        function startCountdown() {
+    function manualReload() {
+        const btn = document.getElementById("reloadBtn");
+        if (btn) btn.classList.add("spinning");
+        loadMessages().finally(function () {
+            // Reset countdown
             countdownVal = REFRESH_SEC;
             updateCountdownUI();
+            if (btn) btn.classList.remove("spinning");
+        });
+    }
 
-            countdownTimer = setInterval(function () {
-                countdownVal--;
+    // ── Countdown & auto-refresh ──────────────────────────────────────────────
 
-                if (countdownVal <= 0) {
-                    countdownVal = REFRESH_SEC;
-                    loadMessages();
-                }
+    function startCountdown() {
+        countdownVal = REFRESH_SEC;
+        updateCountdownUI();
 
-                updateCountdownUI();
-            }, 1000);
-        }
-
-        function updateCountdownUI() {
-            const el = document.getElementById("countdown");
-            if (el) el.textContent = countdownVal;
-
-            const bar = document.getElementById("progressBar");
-            if (bar) {
-                const pct = (countdownVal / REFRESH_SEC) * 100;
-                bar.style.width = pct + "%";
+        countdownTimer = setInterval(function () {
+            countdownVal--;
+            if (countdownVal <= 0) {
+                countdownVal = REFRESH_SEC;
+                loadMessages();
             }
-        }
+            updateCountdownUI();
+        }, 1000);
+    }
 
-        // ── Utils ─────────────────────────────────────────────────────────────
+    function updateCountdownUI() {
+        const el = document.getElementById("countdown");
+        if (el) el.textContent = countdownVal;
 
-        function escapeHtml(value) {
-            return String(value)
-                .replaceAll("&", "&amp;")
-                .replaceAll("<", "&lt;")
-                .replaceAll(">", "&gt;")
-                .replaceAll('"', "&quot;")
-                .replaceAll("'", "&#039;");
-        }
+        const bar = document.getElementById("progressBar");
+        if (bar) bar.style.width = ((countdownVal / REFRESH_SEC) * 100) + "%";
+    }
 
-        function escapeJs(value) {
-            return String(value)
-                .replaceAll("\\", "\\\\")
-                .replaceAll("'", "\\'")
-                .replaceAll('"', '\\"')
-                .replaceAll("\n", "\\n")
-                .replaceAll("\r", "\\r");
-        }
-    </script>
+    // ── Utils ─────────────────────────────────────────────────────────────────
+
+    function showToast(msg) {
+        const t = document.getElementById("toast");
+        t.textContent = msg;
+        t.style.opacity = "1";
+        clearTimeout(t._timer);
+        t._timer = setTimeout(function () { t.style.opacity = "0"; }, 2000);
+    }
+
+    function escapeHtml(v) {
+        return String(v)
+            .replaceAll("&", "&amp;")
+            .replaceAll("<", "&lt;")
+            .replaceAll(">", "&gt;")
+            .replaceAll('"', "&quot;")
+            .replaceAll("'", "&#039;");
+    }
+
+    function escapeJs(v) {
+        return String(v)
+            .replaceAll("\\", "\\\\")
+            .replaceAll("'", "\\'")
+            .replaceAll('"', '\\"')
+            .replaceAll("\n", "\\n")
+            .replaceAll("\r", "\\r");
+    }
+</script>
 </body>
 </html>

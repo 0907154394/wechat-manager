@@ -8,33 +8,35 @@ const {
     getWorkerStatus
 } = require("../imapWorker");
 
-router.get("/status", (req, res) => {
-    res.json(getWorkerStatus());
+function safeStatus() {
+    const s = getWorkerStatus();
+    return {
+        running:        s.running        || false,
+        activeAccounts: s.activeAccounts || 0,
+        lastRunAt:      s.lastRunAt      || null,
+        lastError:      s.lastError      || null,
+        accountErrors:  s.accountErrors  || {}
+    };
+}
+
+router.get("/status", (_req, res) => {
+    res.json(safeStatus());
 });
 
-router.post("/start", (req, res) => {
-    const state = startWorker();
-    res.json({
-        message: "Worker started",
-        state
-    });
+router.post("/start", (_req, res) => {
+    startWorker();
+    res.json({ message: "Worker started", ...safeStatus() });
 });
 
-router.post("/stop", (req, res) => {
-    const state = stopWorker();
-    res.json({
-        message: "Worker stopped",
-        state
-    });
+router.post("/stop", (_req, res) => {
+    stopWorker();
+    res.json({ message: "Worker stopped", ...safeStatus() });
 });
 
-router.post("/reload", async (req, res) => {
+router.post("/reload", async (_req, res) => {
     try {
-        const state = await reloadAccounts();
-        res.json({
-            message: "Reload accounts success",
-            state
-        });
+        await reloadAccounts();
+        res.json({ message: "Reload success", ...safeStatus() });
     } catch (err) {
         res.status(500).json({ message: err.message });
     }

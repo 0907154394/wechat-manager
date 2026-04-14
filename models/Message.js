@@ -20,9 +20,16 @@ const MessageSchema = new mongoose.Schema({
         type: String,
         required: true,
         trim: true
+    },
+    imapUid: {
+        type: Number,
+        default: null
     }
 }, {
     timestamps: true
 });
+
+MessageSchema.index({ accountId: 1, createdAt: -1 });
+MessageSchema.index({ accountId: 1, imapUid: 1 });
 
 module.exports = mongoose.model("Message", MessageSchema);

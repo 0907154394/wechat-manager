@@ -140,6 +140,16 @@
 
         <div class="login-card">
             <div class="field">
+                <label for="username">Tài khoản</label>
+                <input
+                    id="username"
+                    type="text"
+                    placeholder="Nhập tài khoản..."
+                    autocomplete="username"
+                    onkeydown="if(event.key==='Enter') document.getElementById('password').focus()"
+                >
+            </div>
+            <div class="field">
                 <label for="password">Mật khẩu</label>
                 <input
                     id="password"
@@ -164,13 +174,14 @@
         }
 
         async function login() {
+            const username = document.getElementById("username").value.trim();
             const password = document.getElementById("password").value.trim();
             const btn  = document.getElementById("loginBtn");
             const errEl = document.getElementById("error");
 
             errEl.style.display = "none";
-            if (!password) {
-                errEl.textContent = "Vui lòng nhập mật khẩu";
+            if (!username || !password) {
+                errEl.textContent = "Vui lòng nhập đầy đủ tài khoản và mật khẩu";
                 errEl.style.display = "block";
                 return;
             }
@@ -182,7 +193,7 @@
                 const res  = await fetch("/api/auth/login", {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ password })
+                    body: JSON.stringify({ username, password })
                 });
                 const data = await res.json().catch(() => ({}));
 

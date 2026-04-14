@@ -3,7 +3,34 @@ const router = express.Router();
 const Account = require("../models/Account");
 const Message = require("../models/Message");
 
+// ── Rate limiter: tối đa 60 req / phút / IP ──────────────────────────────
+const msgHits = new Map(); // ip → { count, resetAt }
+
+setInterval(() => {
+    const now = Date.now();
+    for (const [ip, e] of msgHits.entries()) {
+        if (now > e.resetAt) msgHits.delete(ip);
+    }
+}, 2 * 60 * 1000);
+
+function checkMsgRate(ip) {
+    const now = Date.now();
+    const WINDOW = 60 * 1000; // 1 phút
+    const MAX    = 60;
+
+    let e = msgHits.get(ip);
+    if (!e || now > e.resetAt) e = { count: 0, resetAt: now + WINDOW };
+    e.count++;
+    msgHits.set(ip, e);
+
+    return e.count > MAX;
+}
+
 router.get("/:token", async (req, res) => {
+    const ip = req.ip || req.socket?.remoteAddress || "unknown";
+    if (checkMsgRate(ip)) {
+        return res.status(429).json({ message: "Quá nhiều yêu cầu, thử lại sau." });
+    }
     try {
         const account = await Account.findOne({ messageToken: req.params.token });
 

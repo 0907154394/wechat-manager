@@ -12,9 +12,12 @@ function normalizeEmail(email) {
     return String(email || "").trim().toLowerCase();
 }
 
+const LINK_TTL_MS = 20 * 60 * 1000; // 20 phút
+
 function buildTokens() {
     return {
         linkToken: "/m/" + uuidv4().replace(/-/g, "").substring(0, 16),
+        linkTokenExpiresAt: new Date(Date.now() + LINK_TTL_MS),
         messageToken: uuidv4().replace(/-/g, "").substring(0, 20)
     };
 }
@@ -53,7 +56,7 @@ router.post("/create-bulk", async (req, res) => {
         const baseEmail = normalizeEmail(req.body.baseEmail);
         const password = String(req.body.password || "").trim();
         const quantity = Number.parseInt(req.body.quantity, 10);
-        const gmailAppPassword = String(req.body.gmailAppPassword || "").trim();
+        const gmailAppPassword = String(req.body.gmailAppPassword || "").replace(/\s/g, "");
 
         if (!baseEmail || !baseEmail.includes("@")) {
             return res.status(400).json({ message: "Email gốc không hợp lệ" });
@@ -61,6 +64,9 @@ router.post("/create-bulk", async (req, res) => {
 
         if (Number.isNaN(quantity) || quantity < 1) {
             return res.status(400).json({ message: "Số lượng không hợp lệ" });
+        }
+        if (quantity > 500) {
+            return res.status(400).json({ message: "Tối đa 500 biến thể mỗi lần" });
         }
 
         const [localPart, domain] = baseEmail.split("@");
@@ -88,6 +94,27 @@ router.post("/create-bulk", async (req, res) => {
         }).select("email");
 
         const existingSet = new Set(existing.map(x => x.email));
+
+        // Nếu không nhập App Password mới, thử lấy IMAP config từ variant cũ cùng Gmail gốc
+        let inheritedImap = null;
+        if (isGmail && !gmailAppPassword) {
+            const prev = await Account.findOne({
+                imapUser: baseEmail,
+                imapEnabled: true,
+                imapPass: { $ne: "" }
+            }).select("imapHost imapPort imapSecure imapUser imapPass");
+            if (prev) {
+                inheritedImap = {
+                    imapHost:    prev.imapHost,
+                    imapPort:    prev.imapPort,
+                    imapSecure:  prev.imapSecure,
+                    imapUser:    prev.imapUser,
+                    imapPass:    prev.imapPass,
+                    imapEnabled: true
+                };
+            }
+        }
+
         const docsToInsert = [];
 
         for (const local of variants) {
@@ -108,15 +135,17 @@ router.post("/create-bulk", async (req, res) => {
                 messageToken: tokens.messageToken
             };
 
-            // Auto-configure Gmail IMAP if App Password provided
             if (isGmail && gmailAppPassword) {
-                doc.imapHost = "imap.gmail.com";
-                doc.imapPort = 993;
-                doc.imapSecure = true;
-                // IMPORTANT: Gmail login uses the base email (dots are ignored by Gmail)
-                doc.imapUser = baseEmail;
-                doc.imapPass = gmailAppPassword;
+                // App Password mới được cung cấp
+                doc.imapHost    = "imap.gmail.com";
+                doc.imapPort    = 993;
+                doc.imapSecure  = true;
+                doc.imapUser    = baseEmail;
+                doc.imapPass    = gmailAppPassword;
                 doc.imapEnabled = true;
+            } else if (inheritedImap) {
+                // Tái sử dụng IMAP config từ variant cũ cùng Gmail gốc
+                Object.assign(doc, inheritedImap);
             }
 
             docsToInsert.push(doc);
@@ -140,7 +169,29 @@ router.post("/create-bulk", async (req, res) => {
 
 router.get("/", async (req, res) => {
     try {
-        const accounts = await Account.find().sort({ createdAt: -1 });
+        const showArchived = req.query.archived === "true";
+        const query = showArchived ? { archived: true } : { archived: { $ne: true } };
+        const accounts = await Account.find(query).sort({ createdAt: -1 });
+        const now = Date.now();
+        const renewOps = [];
+
+        for (const a of accounts) {
+            const expired = !a.linkTokenExpiresAt || a.linkTokenExpiresAt.getTime() < now;
+            if (expired) {
+                const t = buildTokens();
+                a.linkToken = t.linkToken;
+                a.linkTokenExpiresAt = t.linkTokenExpiresAt;
+                renewOps.push(
+                    Account.updateOne({ _id: a._id }, {
+                        linkToken: t.linkToken,
+                        linkTokenExpiresAt: t.linkTokenExpiresAt
+                    })
+                );
+            }
+        }
+
+        if (renewOps.length) await Promise.all(renewOps);
+
         res.json(accounts);
     } catch (error) {
         console.error("get accounts error:", error);
@@ -186,10 +237,56 @@ router.put("/unsell/:id", async (req, res) => {
     }
 });
 
+// Cập nhật IMAP cho TẤT CẢ accounts có cùng imapUser (cùng Gmail gốc)
+router.put("/update-imap-bulk", async (req, res) => {
+    try {
+        const imapUser = String(req.body.imapUser || "").trim().toLowerCase();
+        const imapPass = String(req.body.imapPass || "").replace(/\s/g, "");
+        const imapHost = String(req.body.imapHost || "imap.gmail.com").trim();
+        const imapPort = Number(req.body.imapPort || 993);
+        const imapSecure = req.body.imapSecure !== false;
+
+        if (!imapUser || !imapPass) {
+            return res.status(400).json({ message: "Thiếu imapUser hoặc imapPass" });
+        }
+
+        // Normalize Gmail: xóa dấu chấm để so sánh variants
+        function normalizeGmailLocal(email) {
+            const [local, domain] = email.toLowerCase().split("@");
+            if (!domain) return email.toLowerCase();
+            if (domain === "gmail.com" || domain === "googlemail.com")
+                return local.replace(/\./g, "") + "@" + domain;
+            return email.toLowerCase();
+        }
+
+        const normalizedUser = normalizeGmailLocal(imapUser);
+
+        // Lấy tất cả accounts, lọc các cái có email là variant của imapUser
+        const allAccounts = await Account.find({});
+        const matchIds = allAccounts
+            .filter(a => normalizeGmailLocal(a.email) === normalizedUser)
+            .map(a => a._id);
+
+        if (!matchIds.length) {
+            return res.status(404).json({ message: "Không tìm thấy tài khoản nào phù hợp" });
+        }
+
+        await Account.updateMany(
+            { _id: { $in: matchIds } },
+            { imapHost, imapPort, imapSecure, imapUser, imapPass, imapEnabled: true }
+        );
+
+        res.json({ message: `Đã cập nhật IMAP cho ${matchIds.length} tài khoản`, count: matchIds.length });
+    } catch (error) {
+        console.error("update-imap-bulk error:", error);
+        res.status(500).json({ message: error.message });
+    }
+});
+
 router.put("/update-imap/:id", async (req, res) => {
     try {
         const imapUser = String(req.body.imapUser || "").trim();
-        const imapPass = String(req.body.imapPass || "").trim();
+        const imapPass = String(req.body.imapPass || "").replace(/\s/g, "");
         const imapHost = String(req.body.imapHost || "imap.gmail.com").trim();
         const imapPort = Number(req.body.imapPort || 993);
         const imapSecure = req.body.imapSecure !== false;
@@ -236,24 +333,6 @@ router.put("/wechat-id/:id", async (req, res) => {
     }
 });
 
-router.put("/change-link/:id", async (req, res) => {
-    try {
-        const updated = await Account.findByIdAndUpdate(
-            req.params.id,
-            { linkToken: buildTokens().linkToken },
-            { new: true }
-        );
-
-        if (!updated) {
-            return res.status(404).json({ message: "Không tìm thấy account" });
-        }
-
-        res.json(updated);
-    } catch (error) {
-        console.error("change-link error:", error);
-        res.status(500).json({ message: error.message });
-    }
-});
 
 router.put("/generate-message-tokens", async (req, res) => {
     try {
@@ -311,7 +390,8 @@ router.post("/import-mail", async (req, res) => {
             // Auto-fill Gmail IMAP settings if not provided
             const imapHost = String(parts[2] || "").trim() ||
                 (isGmail ? "imap.gmail.com" : "");
-            const imapPort = Number(parts[3] || (isGmail ? 993 : 993));
+            const rawPort2 = Number(parts[3] || 993);
+            const imapPort = (Number.isInteger(rawPort2) && rawPort2 > 0 && rawPort2 < 65536) ? rawPort2 : 993;
             const imapUser = String(parts[4] || email).trim();
             const imapPass = String(parts[5] || password).trim();
             const secureRaw = String(parts[6] || "true").toLowerCase();
@@ -418,9 +498,8 @@ router.post("/import-mail-file", upload.single("file"), async (req, res) => {
             const imapHost =
                 String(idx.imapHost >= 0 ? cols[idx.imapHost] : "").trim() ||
                 (isGmail ? "imap.gmail.com" : "");
-            const imapPort = Number(
-                idx.imapPort >= 0 ? cols[idx.imapPort] : (isGmail ? 993 : 993)
-            );
+            const rawPort = Number(idx.imapPort >= 0 ? cols[idx.imapPort] : 993);
+            const imapPort = (Number.isInteger(rawPort) && rawPort > 0 && rawPort < 65536) ? rawPort : 993;
             const imapUser = String(
                 idx.imapUser >= 0 ? cols[idx.imapUser] : email
             ).trim();
@@ -487,23 +566,130 @@ router.post("/import-mail-file", upload.single("file"), async (req, res) => {
     }
 });
 
+// Cập nhật thông tin người mua
+router.put("/buyer/:id", async (req, res) => {
+    try {
+        const buyerInfo = String(req.body.buyerInfo || "").trim();
+        const updated = await Account.findByIdAndUpdate(
+            req.params.id,
+            { buyerInfo },
+            { new: true }
+        );
+        if (!updated) return res.status(404).json({ message: "Không tìm thấy account" });
+        res.json({ message: "updated", data: updated });
+    } catch (error) {
+        res.status(500).json({ message: error.message });
+    }
+});
+
+// Cập nhật ngày đăng ký WeChat (tự động set hôm nay nếu không truyền)
+router.put("/wechat-date/:id", async (req, res) => {
+    try {
+        const wechatCreatedAt = req.body.wechatCreatedAt
+            ? new Date(req.body.wechatCreatedAt)
+            : new Date();
+        const updated = await Account.findByIdAndUpdate(
+            req.params.id,
+            { wechatCreatedAt },
+            { new: true }
+        );
+        if (!updated) return res.status(404).json({ message: "Không tìm thấy account" });
+        res.json({ message: "updated", data: updated });
+    } catch (error) {
+        res.status(500).json({ message: error.message });
+    }
+});
+
+// Bulk sell
+router.put("/bulk-sell", async (req, res) => {
+    try {
+        const ids = Array.isArray(req.body.ids) ? req.body.ids : [];
+        if (!ids.length) return res.status(400).json({ message: "Không có ID nào" });
+        const result = await Account.updateMany(
+            { _id: { $in: ids } },
+            { status: "DA BAN" }
+        );
+        res.json({ message: "Đã bán", count: result.modifiedCount });
+    } catch (error) {
+        res.status(500).json({ message: error.message });
+    }
+});
+
+// Archive single (soft delete — giữ email trong DB tránh tái sử dụng variant)
 router.delete("/:id", async (req, res) => {
     try {
-        const accountId = req.params.id;
-
-        const deleted = await Account.findByIdAndDelete(accountId);
-
-        if (!deleted) {
-            return res.status(404).json({ message: "Không tìm thấy account" });
-        }
-
-        await Message.deleteMany({ accountId });
-
-        res.json({
-            message: "Đã xóa account và toàn bộ tin nhắn liên quan"
-        });
+        const updated = await Account.findByIdAndUpdate(
+            req.params.id,
+            { archived: true, imapEnabled: false },
+            { new: true }
+        );
+        if (!updated) return res.status(404).json({ message: "Không tìm thấy account" });
+        res.json({ message: "Đã lưu trữ" });
     } catch (error) {
-        console.error("delete account error:", error);
+        res.status(500).json({ message: error.message });
+    }
+});
+
+// Bulk archive
+router.delete("/bulk", async (req, res) => {
+    try {
+        const ids = Array.isArray(req.body.ids) ? req.body.ids : [];
+        if (!ids.length) return res.status(400).json({ message: "Không có ID nào" });
+        await Account.updateMany({ _id: { $in: ids } }, { archived: true, imapEnabled: false });
+        res.json({ message: "Đã lưu trữ", count: ids.length });
+    } catch (error) {
+        res.status(500).json({ message: error.message });
+    }
+});
+
+// Restore single
+router.put("/restore/:id", async (req, res) => {
+    try {
+        const updated = await Account.findByIdAndUpdate(
+            req.params.id,
+            { archived: false },
+            { new: true }
+        );
+        if (!updated) return res.status(404).json({ message: "Không tìm thấy account" });
+        res.json({ message: "Đã khôi phục", data: updated });
+    } catch (error) {
+        res.status(500).json({ message: error.message });
+    }
+});
+
+// Bulk restore
+router.put("/restore-bulk", async (req, res) => {
+    try {
+        const ids = Array.isArray(req.body.ids) ? req.body.ids : [];
+        if (!ids.length) return res.status(400).json({ message: "Không có ID nào" });
+        await Account.updateMany({ _id: { $in: ids } }, { archived: false });
+        res.json({ message: "Đã khôi phục", count: ids.length });
+    } catch (error) {
+        res.status(500).json({ message: error.message });
+    }
+});
+
+// Hard delete single (xóa cứng — dùng khi chắc chắn không cần nữa)
+router.delete("/hard/:id", async (req, res) => {
+    try {
+        const deleted = await Account.findByIdAndDelete(req.params.id);
+        if (!deleted) return res.status(404).json({ message: "Không tìm thấy account" });
+        await Message.deleteMany({ accountId: req.params.id });
+        res.json({ message: "Đã xóa cứng" });
+    } catch (error) {
+        res.status(500).json({ message: error.message });
+    }
+});
+
+// Hard delete bulk
+router.delete("/hard-bulk", async (req, res) => {
+    try {
+        const ids = Array.isArray(req.body.ids) ? req.body.ids : [];
+        if (!ids.length) return res.status(400).json({ message: "Không có ID nào" });
+        await Account.deleteMany({ _id: { $in: ids } });
+        await Message.deleteMany({ accountId: { $in: ids } });
+        res.json({ message: "Đã xóa cứng", count: ids.length });
+    } catch (error) {
         res.status(500).json({ message: error.message });
     }
 });

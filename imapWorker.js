@@ -7,47 +7,135 @@ let workerState = {
     lastRunAt: null,
     activeAccounts: 0,
     intervalId: null,
-    lastError: ""
+    lastError: "",
+    accountErrors: {}   // imapUser → error message
 };
 
-// Normalize Gmail address: remove dots from local part, strip +alias
-// e.g. a.bc+wechat@gmail.com → abc@gmail.com
-function normalizeGmail(email) {
-    const str = String(email || "").toLowerCase().trim();
-    const atIdx = str.lastIndexOf("@");
-    if (atIdx < 0) return str;
-
-    const local = str.substring(0, atIdx);
-    const domain = str.substring(atIdx + 1);
-
-    if (domain === "gmail.com" || domain === "googlemail.com") {
-        const normalized = local.replace(/\./g, "").split("+")[0];
-        return `${normalized}@${domain}`;
+// Decode base64 email body (handles line-wrapped base64)
+function decodeBase64Body(str) {
+    try {
+        const clean = str.replace(/\s+/g, "");
+        return Buffer.from(clean, "base64").toString("utf8");
+    } catch {
+        return str;
     }
-
-    return str;
 }
 
-// Extract readable text from raw email source (no external libs)
+// Decode quoted-printable encoding
+function decodeQP(str) {
+    return str
+        .replace(/=\r?\n/g, "")
+        .replace(/=([0-9A-Fa-f]{2})/g, (_, hex) =>
+            String.fromCharCode(parseInt(hex, 16))
+        );
+}
+
+// Parse headers block → { contentType, encoding, boundary }
+function parseHeaders(headerBlock) {
+    // Unfold folded headers (continuation lines starting with \t or space)
+    const unfolded = headerBlock.replace(/\r?\n[ \t]+/g, " ");
+    const ctM   = unfolded.match(/Content-Type:\s*([^\s;]+)/i);
+    const cteM  = unfolded.match(/Content-Transfer-Encoding:\s*(\S+)/i);
+    const bndM  = unfolded.match(/boundary\s*=\s*["']?([^"'\r\n;]+)/i);
+    return {
+        contentType: ctM  ? ctM[1].toLowerCase()  : "",
+        encoding:    cteM ? cteM[1].toLowerCase()  : "7bit",
+        boundary:    bndM ? bndM[1].trim().replace(/["']/g, "") : ""
+    };
+}
+
+// Decode a MIME body part based on its Content-Transfer-Encoding
+function decodePart(body, encoding) {
+    if (encoding === "base64")             return decodeBase64Body(body);
+    if (encoding === "quoted-printable")   return decodeQP(body);
+    return body; // 7bit / 8bit / binary
+}
+
+// Extract readable plain text from a multipart MIME structure (recursive)
+function extractFromMultipart(raw, boundary) {
+    const escaped = boundary.replace(/[.*+?^${}()|[\]\\-]/g, "\\$&");
+    // Split on boundary lines
+    const parts = raw.split(new RegExp(`\r?\n?--${escaped}(?:--)?[ \t]*\r?\n`, "g")).slice(1);
+
+    let htmlFallback = "";
+
+    for (const part of parts) {
+        const blankIdx = part.search(/\r?\n\r?\n/);
+        if (blankIdx < 0) continue;
+
+        const headerBlock = part.substring(0, blankIdx);
+        const body        = part.substring(blankIdx).replace(/^\r?\n|\r?\n$/, "").trim();
+        if (!body) continue;
+
+        const { contentType, encoding, boundary: inner } = parseHeaders(headerBlock);
+
+        // Recurse into nested multipart
+        if (contentType.startsWith("multipart/") && inner) {
+            const result = extractFromMultipart(body, inner);
+            if (result) return result;
+            continue;
+        }
+
+        if (contentType === "text/plain") {
+            const decoded = decodePart(body, encoding).trim();
+            if (decoded) return decoded;
+        }
+
+        if (contentType === "text/html" && !htmlFallback) {
+            const decoded = decodePart(body, encoding);
+            htmlFallback = decoded.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
+        }
+    }
+
+    return htmlFallback;
+}
+
+// Extract readable text from raw email source
 function extractContent(source) {
     const raw = source.toString("utf8");
 
-    // Try to find text/plain section in MIME
-    const plainMatch = raw.match(
-        /Content-Type:\s*text\/plain[^\r\n]*\r?\n(?:[A-Za-z-]+:[^\r\n]*\r?\n)*\r?\n([\s\S]*?)(?=\r?\n--|\r?\n\r?\n--|$)/i
-    );
-    if (plainMatch && plainMatch[1].trim()) {
-        return plainMatch[1].trim().slice(0, 3000);
+    // Find end of top-level headers
+    const headerEnd = raw.search(/\r?\n\r?\n/);
+    if (headerEnd < 0) return raw.slice(0, 3000);
+
+    const topHeaders = raw.substring(0, headerEnd);
+    const { contentType, encoding, boundary } = parseHeaders(topHeaders);
+
+    // Multipart email → use boundary-based parser
+    if (contentType.startsWith("multipart/") && boundary) {
+        const result = extractFromMultipart(raw.substring(headerEnd + 2), boundary);
+        if (result) return result.slice(0, 3000);
     }
 
-    // Fallback: body after headers double-blank-line
-    const idx = raw.search(/\r?\n\r?\n/);
-    if (idx >= 0) {
-        const body = raw.substring(idx + 2).slice(0, 3000);
-        return body.trim() || raw.slice(0, 3000);
+    // Single-part email
+    const body = raw.substring(headerEnd + 2).trim();
+
+    if (contentType === "text/plain") {
+        const decoded = decodePart(body, encoding).trim();
+        if (decoded) return decoded.slice(0, 3000);
     }
 
-    return raw.slice(0, 3000);
+    if (contentType === "text/html") {
+        const decoded = decodePart(body, encoding);
+        const stripped = decoded.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
+        if (stripped) return stripped.slice(0, 3000);
+    }
+
+    // Last resort: return raw body
+    return body.slice(0, 3000);
+}
+
+// Detect content saved before the MIME parser was fixed:
+// raw base64 lines or leaked MIME headers.
+function isGarbled(content) {
+    if (!content || !content.trim()) return true;
+    if (/^Content-Type:/im.test(content)) return true;
+    if (/^Content-Transfer-Encoding:/im.test(content)) return true;
+    // Long unbroken base64-alphabet lines (>= 40 chars, no spaces)
+    if (/^[A-Za-z0-9+/]{40,}={0,2}\s*$/m.test(content)) return true;
+    // MIME boundary lines (e.g. ------=_NextPart_..., --Apple-Mail-..., etc.)
+    if (/^-{4,}[A-Za-z0-9_=]+/m.test(content)) return true;
+    return false;
 }
 
 // Sync a group of accounts that share the same IMAP credentials.
@@ -62,7 +150,14 @@ async function syncGroup(imapConfig, accounts) {
             user: imapConfig.user,
             pass: imapConfig.pass
         },
-        logger: false
+        logger: false,
+        socketTimeout: 30000,    // 30s không nhận dữ liệu → cắt kết nối
+        connectionTimeout: 15000 // 15s không connect được → báo lỗi
+    });
+
+    // Bắt lỗi socket bắn ra ngoài Promise (timer callbacks) — tránh crash Electron
+    client.on("error", err => {
+        console.error("IMAP client error [%s]:", imapConfig.user, err.message);
     });
 
     try {
@@ -96,10 +191,12 @@ async function syncGroup(imapConfig, accounts) {
                 messages.push(msg);
             }
 
-            // Build lookup: normalized email → account
-            const accountByNorm = new Map();
+            // Build lookup: exact lowercase email → account
+            // Do NOT normalize here — WeChat sends to the specific variant address
+            // e.g. "t.hienzx9@gmail.com" → only that account, not all variants
+            const accountByEmail = new Map();
             for (const account of accounts) {
-                accountByNorm.set(normalizeGmail(account.email), account);
+                accountByEmail.set(account.email.toLowerCase().trim(), account);
             }
 
             for (const msg of messages) {
@@ -109,35 +206,68 @@ async function syncGroup(imapConfig, accounts) {
 
                 if (!content.trim()) continue;
 
-                // Determine which account(s) this email belongs to via To: header
+                // Match by exact To: address (case-insensitive)
+                // Fallback: parse raw To: header nếu envelope bị normalize
                 const toAddrs = msg.envelope?.to || [];
                 let targetAccounts = [];
 
                 for (const addr of toAddrs) {
-                    const norm = normalizeGmail(addr.address || "");
-                    const found = accountByNorm.get(norm);
+                    const addrLower = (addr.address || "").toLowerCase().trim();
+                    const found = accountByEmail.get(addrLower);
                     if (found) targetAccounts.push(found);
                 }
 
-                // If To: didn't match any known account, save to all in this group
-                // (handles cases where email was forwarded or BCC'd)
-                if (targetAccounts.length === 0) {
-                    targetAccounts = accounts;
+                // Fallback: nếu envelope.to không khớp, đọc header To: từ raw source
+                if (targetAccounts.length === 0 && msg.source) {
+                    const rawStr = msg.source.toString("utf8", 0, 2000);
+                    const toHeaderMatch = rawStr.match(/^To:\s*(.+?)(?:\r?\n(?![ \t]))/im);
+                    if (toHeaderMatch) {
+                        const rawToLine = toHeaderMatch[1];
+                        // Trích tất cả địa chỉ email trong dòng To:
+                        const emailsInTo = [...rawToLine.matchAll(/[\w.+%-]+@[\w.-]+\.\w+/g)]
+                            .map(m => m[0].toLowerCase());
+                        for (const e of emailsInTo) {
+                            const found = accountByEmail.get(e);
+                            if (found) targetAccounts.push(found);
+                        }
+                    }
                 }
 
+                // Nếu vẫn không khớp (BCC, forward...) → bỏ qua
+                if (targetAccounts.length === 0) continue;
+
                 for (const account of targetAccounts) {
-                    const existed = await Message.findOne({
+                    // Step 1: check by IMAP UID
+                    const byUid = await Message.findOne({
                         accountId: account._id,
-                        subject,
-                        sender
+                        imapUid: msg.uid
                     });
 
-                    if (!existed) {
+                    if (byUid) {
+                        // Content may be garbled from before MIME parser was fixed.
+                        // Overwrite if it still contains leaked MIME headers or raw base64.
+                        if (isGarbled(byUid.content)) {
+                            await Message.updateOne(
+                                { _id: byUid._id },
+                                { $set: { content } }
+                            );
+                        }
+                        continue;
+                    }
+
+                    // Step 2: old messages without imapUid — stamp uid + refresh content
+                    const bySubject = await Message.findOneAndUpdate(
+                        { accountId: account._id, subject, sender, imapUid: null },
+                        { $set: { imapUid: msg.uid, content } }
+                    );
+
+                    if (!bySubject) {
                         await Message.create({
                             accountId: account._id,
                             sender,
                             subject,
-                            content
+                            content,
+                            imapUid: msg.uid
                         });
                     }
                 }
@@ -151,11 +281,16 @@ async function syncGroup(imapConfig, accounts) {
 }
 
 async function runWorkerOnce() {
+    // Sync tất cả acc có IMAP bật và chưa lưu trữ.
+    // Không lọc theo status vì acc CHUA BAN vẫn cần OTP khi đang đăng ký WeChat.
+    // Tiết kiệm tài nguyên thực sự là giảm số Gmail gốc (IMAP connections),
+    // không phải số variants — các variants cùng gốc dùng chung 1 kết nối.
     const accounts = await Account.find({
         imapEnabled: true,
         imapHost: { $ne: "" },
         imapUser: { $ne: "" },
-        imapPass: { $ne: "" }
+        imapPass: { $ne: "" },
+        archived: { $ne: true }
     });
 
     workerState.activeAccounts = accounts.length;
@@ -187,18 +322,20 @@ async function runWorkerOnce() {
         groups.get(key).accounts.push(account);
     }
 
-    for (const [, group] of groups) {
-        try {
-            await syncGroup(group.config, group.accounts);
-        } catch (err) {
-            workerState.lastError = err.message;
-            console.error(
-                "IMAP sync error [%s]:",
-                group.config.user,
-                err.message
-            );
-        }
-    }
+    // Run all IMAP groups in parallel — total time = slowest group, not sum of all
+    await Promise.allSettled(
+        [...groups.values()].map(group =>
+            syncGroup(group.config, group.accounts)
+                .then(() => {
+                    delete workerState.accountErrors[group.config.user];
+                })
+                .catch(err => {
+                    workerState.lastError = err.message;
+                    workerState.accountErrors[group.config.user] = err.message;
+                    console.error("IMAP sync error [%s]:", group.config.user, err.message);
+                })
+        )
+    );
 }
 
 function startWorker() {
@@ -214,7 +351,7 @@ function startWorker() {
             workerState.lastError = err.message;
             console.error("Worker loop error:", err.message);
         }
-    }, 30000);
+    }, 20000);
 
     runWorkerOnce().catch(err => {
         workerState.lastError = err.message;
