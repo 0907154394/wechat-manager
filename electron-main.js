@@ -28,16 +28,6 @@ function getIconPath() {
     return candidates.find(p => { try { return fs.existsSync(p); } catch { return false; } }) || null;
 }
 
-// ── Kiểm tra port có đang bị chiếm không ─────────────────────────────────
-function isPortFree(port) {
-    return new Promise(resolve => {
-        const srv = net.createServer();
-        srv.once("listening", () => { srv.close(); resolve(true); });
-        srv.once("error",     () => resolve(false));
-        srv.listen(port, "0.0.0.0"); // kiểm tra trên tất cả interfaces như Express
-    });
-}
-
 // ── Express server ────────────────────────────────────────────────────────
 function startServer() {
     try {
@@ -104,15 +94,15 @@ function createWindow() {
     // Hiện splash ngay, không đợi server
     mainWindow.loadFile(path.join(__dirname, "splash.html")).catch(() => {});
 
-    // Poll đến khi server lắng nghe, rồi navigate
+    // Poll đến khi server sẵn sàng, rồi navigate
     const waitForServer = (attempt = 0) => {
-        isPortFree(PORT).then(free => {
-            if (!free) {
-                mainWindow.loadURL(`http://localhost:${PORT}`).catch(() => {});
-            } else if (attempt < 80) {
-                setTimeout(() => waitForServer(attempt + 1), 200);
-            }
-        }).catch(() => {
+        const socket = net.createConnection(PORT, "127.0.0.1");
+        socket.once("connect", () => {
+            socket.destroy();
+            mainWindow.loadURL(`http://localhost:${PORT}`).catch(() => {});
+        });
+        socket.once("error", () => {
+            socket.destroy();
             if (attempt < 80) setTimeout(() => waitForServer(attempt + 1), 200);
         });
     };
@@ -228,18 +218,7 @@ if (!gotLock) {
 
     // ── App lifecycle ─────────────────────────────────────────────────────
     app.whenReady().then(async () => {
-        // 1. Kiểm tra port — chỉ trigger khi app khác (không phải instance của mình) chiếm cổng
-        const free = await isPortFree(PORT);
-        if (!free) {
-            dialog.showErrorBox(
-                "Cổng đang bận",
-                `Cổng ${PORT} đang được dùng bởi ứng dụng khác.\n\nKiểm tra xem WeChat Manager có đang chạy rồi không,\nhoặc đổi PORT trong file .env.`
-            );
-            app.quit();
-            return;
-        }
-
-        // 2. Khởi động server
+        // 1. Khởi động server
         startServer();
 
         // 3. Sau 9 giây kiểm tra MongoDB — nếu lỗi thì hiện dialog cảnh báo
