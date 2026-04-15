@@ -244,7 +244,7 @@ function renderTable(data) {
             <td><span class="status ${statusClass}">${a.status === "DA BAN" ? "Đã bán" : "Chưa bán"}</span></td>
 
             <td>
-                ${dateAddedHtml(a.createdAt)}
+                ${dateAddedHtml(a.wechatCreatedAt)}
             </td>
 
             <td>
