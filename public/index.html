@@ -110,7 +110,7 @@
                                 <th>Email</th>
                                 <th style="width:150px">WeChat ID</th>
                                 <th style="width:110px">Trạng thái</th>
-                                <th style="width:110px">Hết hạn</th>
+                                <th style="width:110px">Ngày thêm</th>
                                 <th style="width:220px">Link OTP</th>
                                 <th style="width:280px">Thao tác</th>
                             </tr>
@@ -238,9 +238,11 @@
                         <div class="section-title-dot"></div>
                         <h3>Cloudflare Worker</h3>
                     </div>
-                    <p class="import-note" style="margin-bottom:16px">
-                        URL Worker relay — khách lấy OTP qua đây. URL ổn định, không đổi dù restart app.
-                    </p>
+                    <div class="worker-explain">
+                        <div class="worker-explain-row"><span class="we-icon">🌐</span><span>Cloudflare Worker là dịch vụ trung gian miễn phí — khi có OTP mới, app tự đẩy lên Worker.</span></div>
+                        <div class="worker-explain-row"><span class="we-icon">🔗</span><span>Khách hàng vào link <b>/c/token</b> để lấy OTP — link này ổn định, không đổi dù tắt/mở lại app.</span></div>
+                        <div class="worker-explain-row"><span class="we-icon">📋</span><span>Deploy file <b>worker/index.js</b> lên Cloudflare (miễn phí), bind KV namespace tên <b>OTP_KV</b>, thêm secret <b>PUSH_SECRET</b>.</span></div>
+                    </div>
                     <div class="modal-field">
                         <label>Worker URL</label>
                         <input id="st_workerUrl" type="url" placeholder="https://your-worker.workers.dev" style="width:100%">
@@ -331,6 +333,6 @@
     </div>
 </div>
 
-<script src="script.js?v=130"></script>
+<script src="script.js?v=131"></script>
 </body>
 </html>

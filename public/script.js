@@ -34,8 +34,16 @@ async function adminFetch(url, options = {}) {
 
 function showSection(name) {
     ["accounts", "tools", "settings"].forEach(s => {
-        document.getElementById("section-" + s).style.display = s === name ? "" : "none";
+        const el = document.getElementById("section-" + s);
         const btn = document.getElementById("nav-" + s);
+        if (s === name) {
+            el.style.display = "";
+            el.classList.remove("section-enter");
+            void el.offsetWidth; // reflow
+            el.classList.add("section-enter");
+        } else {
+            el.style.display = "none";
+        }
         if (btn) btn.classList.toggle("active", s === name);
     });
     if (name === "settings") loadSettingsSection();
@@ -150,6 +158,17 @@ async function loadAccounts() {
     }
 }
 
+// ─── Date helpers ─────────────────────────────────────────────────────────────
+
+function dateAddedHtml(createdAt) {
+    if (!createdAt) return `<span style="color:var(--text-muted)">-</span>`;
+    const d = new Date(createdAt);
+    const day   = String(d.getDate()).padStart(2, "0");
+    const month = String(d.getMonth() + 1).padStart(2, "0");
+    const year  = d.getFullYear();
+    return `<span class="date-added">${day}/${month}/${year}</span>`;
+}
+
 // ─── Countdown helpers ────────────────────────────────────────────────────────
 
 function linkMinLeft(expiresAt) {
@@ -225,7 +244,7 @@ function renderTable(data) {
             <td><span class="status ${statusClass}">${a.status === "DA BAN" ? "Đã bán" : "Chưa bán"}</span></td>
 
             <td>
-                ${countdownHtml(a.wechatCreatedAt)}
+                ${dateAddedHtml(a.createdAt)}
             </td>
 
             <td>
@@ -1003,15 +1022,16 @@ function showToast(msg, isError = false) {
     if (!t) {
         t = document.createElement("div");
         t.id = "toast";
-        t.style.cssText = `position:fixed;bottom:80px;right:24px;padding:9px 18px;border-radius:10px;font-size:13px;font-weight:600;z-index:9999;transition:opacity .3s;pointer-events:none`;
+        t.className = "toast-popup";
         document.body.appendChild(t);
     }
     t.textContent = msg;
     t.style.background = isError ? "#ef4444" : "#10b981";
-    t.style.color = "#fff";
-    t.style.opacity = "1";
+    t.classList.remove("toast-show");
+    void t.offsetWidth;
+    t.classList.add("toast-show");
     clearTimeout(t._timer);
-    t._timer = setTimeout(() => { t.style.opacity = "0"; }, 1800);
+    t._timer = setTimeout(() => { t.classList.remove("toast-show"); }, 2000);
 }
 
 // ─── Utils ────────────────────────────────────────────────────────────────────
