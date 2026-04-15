@@ -154,20 +154,24 @@
                     <h3>Import Mail</h3>
                 </div>
                 <p class="import-note">
-                    Format: <b>email|password|imapHost|imapPort|imapUser|imapPass|secure</b><br>
-                    Gmail tự động dùng <b>imap.gmail.com</b> — chỉ cần: <b>email|password||||||app-password</b>
+                    Dán dữ liệu với bất kỳ ký tự phân cách: <b>| , tab : khoảng trắng</b> — hệ thống tự nhận dạng.<br>
+                    Thứ tự cột: <b>email · password · imapHost · imapPort · imapUser · imapPass · secure</b>
                 </p>
-                <div id="dropZone" class="drop-zone">
-                    <p>Kéo &amp; thả file CSV vào đây hoặc</p>
-                    <input id="excelFileInput" type="file" accept=".csv" hidden>
-                    <button type="button" onclick="document.getElementById('excelFileInput').click()">Chọn file CSV</button>
-                    <div id="selectedFileName" class="selected-file-name"></div>
+                <div class="smart-import-bar">
+                    <button type="button" class="link-btn" onclick="downloadTemplate()">Tải template</button>
+                    <div id="dropZone" class="drop-zone drop-zone-inline">
+                        <input id="excelFileInput" type="file" accept=".csv" hidden>
+                        <button type="button" onclick="document.getElementById('excelFileInput').click()">Chọn file CSV</button>
+                        <div id="selectedFileName" class="selected-file-name"></div>
+                        <button type="button" class="link-btn" onclick="uploadExcelFile()">Import CSV</button>
+                    </div>
                 </div>
                 <textarea id="importMailRows" class="import-area"
-                    placeholder="abc@gmail.com|mat-khau|||||||app-password-16-ky-tu"></textarea>
-                <div class="form-row">
-                    <button type="button" onclick="importMail()">Import Text</button>
-                    <button type="button" class="link-btn" onclick="uploadExcelFile()">Import CSV</button>
+                    placeholder="Dán dữ liệu vào đây — hệ thống tự phát hiện ký tự phân cách..."
+                    oninput="smartImportPreview()"></textarea>
+                <div id="importPreview"></div>
+                <div class="form-row" style="margin-top:12px">
+                    <button type="button" id="importConfirmBtn" style="display:none" onclick="confirmSmartImport()">Import 0 dòng</button>
                 </div>
             </section>
 
@@ -198,6 +202,8 @@
 
             <div class="settings-grid">
 
+                <div class="settings-col">
+
                 <section class="card">
                     <div class="section-title">
                         <div class="section-title-dot"></div>
@@ -226,6 +232,28 @@
                     <div id="st_error" style="display:none;color:#fca5a5;font-size:13px;margin-bottom:14px"></div>
                     <button id="st_saveBtn" onclick="saveSettings()">Lưu thay đổi</button>
                 </section>
+
+                <section class="card">
+                    <div class="section-title">
+                        <div class="section-title-dot"></div>
+                        <h3>Cloudflare Worker</h3>
+                    </div>
+                    <p class="import-note" style="margin-bottom:16px">
+                        URL Worker relay — khách lấy OTP qua đây. URL ổn định, không đổi dù restart app.
+                    </p>
+                    <div class="modal-field">
+                        <label>Worker URL</label>
+                        <input id="st_workerUrl" type="url" placeholder="https://your-worker.workers.dev" style="width:100%">
+                    </div>
+                    <div class="modal-field">
+                        <label>Worker Secret (PUSH_SECRET)</label>
+                        <input id="st_workerSecret" type="password" placeholder="Để trống để giữ nguyên secret cũ" style="width:100%">
+                    </div>
+                    <div id="st_workerError" style="display:none;color:#fca5a5;font-size:13px;margin-bottom:14px"></div>
+                    <button id="st_workerSaveBtn" onclick="saveWorkerConfig()">Lưu</button>
+                </section>
+
+                </div><!-- end settings-col -->
 
                 <section class="card">
                     <div class="section-title">
@@ -303,6 +331,6 @@
     </div>
 </div>
 
-<script src="script.js?v=404"></script>
+<script src="script.js?v=130"></script>
 </body>
 </html>

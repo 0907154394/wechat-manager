@@ -1,6 +1,8 @@
 const express = require("express");
-const router = express.Router();
-const multer = require("multer");
+const router  = express.Router();
+const multer  = require("multer");
+const https   = require("https");
+const http    = require("http");
 const { v4: uuidv4 } = require("uuid");
 
 const Account = require("../models/Account");
@@ -12,14 +14,46 @@ function normalizeEmail(email) {
     return String(email || "").trim().toLowerCase();
 }
 
-const LINK_TTL_MS = 20 * 60 * 1000; // 20 phút
+const LINK_TTL_MS = 60 * 60 * 1000; // 1 giờ
 
 function buildTokens() {
     return {
-        linkToken: "/m/" + uuidv4().replace(/-/g, "").substring(0, 16),
+        linkToken:          "/m/" + uuidv4().replace(/-/g, "").substring(0, 16),
         linkTokenExpiresAt: new Date(Date.now() + LINK_TTL_MS),
-        messageToken: uuidv4().replace(/-/g, "").substring(0, 20)
+        messageToken:       uuidv4().replace(/-/g, "").substring(0, 20)
     };
+}
+
+// Đăng ký linkToken lên Cloudflare Worker (fire and forget)
+function pushLinkToWorker(linkToken, messageToken, expiresAt) {
+    const workerUrl = process.env.WORKER_URL;
+    const secret    = process.env.WORKER_SECRET;
+    if (!workerUrl || !secret) return;
+
+    try {
+        const parsed  = new URL(workerUrl + "/api/link");
+        const payload = Buffer.from(JSON.stringify({
+            linkToken:    linkToken.replace("/m/", ""),
+            messageToken,
+            expiresAt:    new Date(expiresAt).getTime()
+        }));
+        const lib = parsed.protocol === "https:" ? https : http;
+
+        const req = lib.request({
+            hostname: parsed.hostname,
+            port:     parsed.port || (parsed.protocol === "https:" ? 443 : 80),
+            path:     parsed.pathname,
+            method:   "POST",
+            headers: {
+                "Content-Type":   "application/json",
+                "Content-Length": payload.length,
+                "Authorization":  `Bearer ${secret}`
+            }
+        });
+        req.on("error", () => {});
+        req.write(payload);
+        req.end();
+    } catch { /* ignore */ }
 }
 
 function generateDotVariants(localPart) {
@@ -173,24 +207,34 @@ router.get("/", async (req, res) => {
         const query = showArchived ? { archived: true } : { archived: { $ne: true } };
         const accounts = await Account.find(query).sort({ createdAt: -1 });
         const now = Date.now();
-        const renewOps = [];
+        const renewOps   = [];
+        const renewedAccs = [];
 
         for (const a of accounts) {
             const expired = !a.linkTokenExpiresAt || a.linkTokenExpiresAt.getTime() < now;
             if (expired) {
                 const t = buildTokens();
-                a.linkToken = t.linkToken;
+                a.linkToken          = t.linkToken;
                 a.linkTokenExpiresAt = t.linkTokenExpiresAt;
                 renewOps.push(
                     Account.updateOne({ _id: a._id }, {
-                        linkToken: t.linkToken,
+                        linkToken:          t.linkToken,
                         linkTokenExpiresAt: t.linkTokenExpiresAt
                     })
                 );
+                renewedAccs.push(a);
             }
         }
 
-        if (renewOps.length) await Promise.all(renewOps);
+        if (renewOps.length) {
+            await Promise.all(renewOps);
+            // Đăng ký linkToken mới lên Cloudflare Worker
+            for (const a of renewedAccs) {
+                if (a.messageToken) {
+                    pushLinkToWorker(a.linkToken, a.messageToken, a.linkTokenExpiresAt);
+                }
+            }
+        }
 
         res.json(accounts);
     } catch (error) {

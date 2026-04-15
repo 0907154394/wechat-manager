@@ -225,6 +225,7 @@ html, body {
     gap: 20px;
     align-items: start;
 }
+.settings-grid > .settings-col { min-width: 0; }
 
 /* IMAP health list */
 .health-ok {
@@ -873,12 +874,101 @@ input[type="checkbox"] {
 .page-ellipsis { color: var(--text-muted); padding: 0 3px; font-size: 13px; }
 
 /* ══════════════════════════════════════════════
+   SMART IMPORT
+══════════════════════════════════════════════ */
+
+.smart-import-bar {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 12px;
+    flex-wrap: wrap;
+}
+
+.drop-zone-inline {
+    flex: 1;
+    border-radius: var(--radius);
+    padding: 10px 16px;
+    margin-bottom: 0;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+    min-width: 0;
+}
+
+.drop-zone-inline p { display: none; }
+
+.import-preview-header {
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: .06em;
+    padding: 8px 4px 6px;
+}
+
+.import-table-wrap {
+    overflow-x: auto;
+    border-radius: var(--radius);
+    border: 1px solid var(--border);
+    margin-bottom: 4px;
+}
+
+.import-preview-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12px;
+}
+
+.import-preview-table th {
+    background: var(--panel-alt);
+    color: var(--text-dim);
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .05em;
+    padding: 7px 12px;
+    white-space: nowrap;
+    text-align: left;
+    border-bottom: 1px solid var(--border);
+}
+
+.import-preview-table td {
+    padding: 6px 12px;
+    color: var(--text);
+    border-bottom: 1px solid var(--border);
+    white-space: nowrap;
+    max-width: 200px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.import-preview-table tbody tr:last-child td { border-bottom: none; }
+.import-preview-table tbody tr:hover td { background: rgba(91,124,247,.05); }
+
+.preview-more {
+    text-align: center;
+    color: var(--text-muted);
+    font-style: italic;
+    padding: 8px 12px !important;
+}
+
+/* Settings column wrapper */
+.settings-col {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+/* ══════════════════════════════════════════════
    RESPONSIVE
 ══════════════════════════════════════════════ */
 
 @media (max-width: 1100px) {
     .stats { grid-template-columns: 1fr 1fr; }
     .settings-grid { grid-template-columns: 1fr; }
+    .settings-col { gap: 16px; }
 }
 
 @media (max-width: 720px) {

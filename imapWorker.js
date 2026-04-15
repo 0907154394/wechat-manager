@@ -1,6 +1,36 @@
 const { ImapFlow } = require("imapflow");
+const https = require("https");
+const http  = require("http");
 const Account = require("./models/Account");
 const Message = require("./models/Message");
+
+// ── Push OTP lên Cloudflare Worker ────────────────────────────────────────
+function pushToWorker(messageToken, content, email) {
+    const workerUrl = process.env.WORKER_URL;
+    const secret    = process.env.WORKER_SECRET;
+    if (!workerUrl || !secret) return; // Worker chưa cấu hình → bỏ qua
+
+    try {
+        const parsed  = new URL(workerUrl + "/api/push");
+        const payload = Buffer.from(JSON.stringify({ messageToken, content, email }));
+        const lib     = parsed.protocol === "https:" ? https : http;
+
+        const req = lib.request({
+            hostname: parsed.hostname,
+            port:     parsed.port || (parsed.protocol === "https:" ? 443 : 80),
+            path:     parsed.pathname,
+            method:   "POST",
+            headers: {
+                "Content-Type":   "application/json",
+                "Content-Length": payload.length,
+                "Authorization":  `Bearer ${secret}`
+            }
+        });
+        req.on("error", () => {}); // fire and forget
+        req.write(payload);
+        req.end();
+    } catch { /* ignore */ }
+}
 
 let workerState = {
     running: false,
@@ -269,6 +299,10 @@ async function syncGroup(imapConfig, accounts) {
                             content,
                             imapUid: msg.uid
                         });
+                        // Đẩy OTP mới lên Cloudflare Worker
+                        if (account.messageToken) {
+                            pushToWorker(account.messageToken, content, account.email);
+                        }
                     }
                 }
             }

@@ -4,7 +4,8 @@ let selectedIds = new Set();
 let currentPage = 1;
 let PAGE_SIZE = 50;
 let selectedExcelFile = null;
-let publicBaseUrl = "";
+let publicBaseUrl = "";   // Cloudflare tunnel URL (changes on restart)
+let workerBaseUrl = "";   // Cloudflare Worker URL (stable)
 let imapAccountErrors = {}; // imapUser → error message
 
 // ─── Auth ─────────────────────────────────────────────────────────────────────
@@ -48,6 +49,12 @@ async function loadSettingsSection() {
         const n = document.getElementById("st_newUser");
         if (u) u.value = data.username || "";
         if (n && !n.value) n.value = data.username || "";
+        // Load Worker URL
+        if (data.workerUrl) workerBaseUrl = data.workerUrl.replace(/\/$/, "");
+        const wu = document.getElementById("st_workerUrl");
+        if (wu && data.workerUrl) wu.value = data.workerUrl;
+        const ws = document.getElementById("st_workerSecret");
+        if (ws && data.hasSecret) ws.placeholder = "Secret đã lưu — để trống để giữ nguyên";
     } catch { /* ignore */ }
     renderImapHealth();
 }
@@ -87,10 +94,14 @@ async function loadConfig() {
     try {
         const res = await fetch("/api/config");
         const data = await res.json();
-        if (data.publicUrl) {
-            publicBaseUrl = data.publicUrl;
-        }
+        if (data.publicUrl) publicBaseUrl = data.publicUrl;
     } catch { /* dùng window.location.origin làm fallback */ }
+    // Load Worker URL from settings (to build customer links)
+    try {
+        const res = await adminFetch("/api/settings/info");
+        const data = await safeJson(res);
+        if (data.workerUrl) workerBaseUrl = data.workerUrl.replace(/\/$/, "");
+    } catch { /* ignore */ }
 }
 
 // ─── File drop ───────────────────────────────────────────────────────────────
@@ -182,8 +193,8 @@ function renderTable(data) {
     pageData.forEach((a, i) => {
         const globalIdx = start + i;
         const statusClass = a.status === "DA BAN" ? "da" : "chua";
-        const baseUrl = publicBaseUrl || window.location.origin;
-        const fullLink = a.linkToken ? baseUrl + a.linkToken : "";
+        const linkBase = workerBaseUrl || publicBaseUrl || window.location.origin;
+        const fullLink = a.linkToken ? linkBase + a.linkToken : "";
         const checked = selectedIds.has(a._id) ? "checked" : "";
         const imapUser = escapeJs(a.imapUser || a.email || "");
         const imapHost = escapeJs(a.imapHost || "");
@@ -630,6 +641,113 @@ async function uploadExcelFile() {
     } catch (err) { if (err.message !== "Session expired") alert("Lỗi kết nối"); }
 }
 
+// ─── Smart Import ────────────────────────────────────────────────────────────
+
+let _smartImportRows = [];
+
+function detectDelimiter(text) {
+    const line = (text.split("\n")[0] || "").slice(0, 500);
+    const scores = {
+        "|": (line.match(/\|/g) || []).length,
+        ",": (line.match(/,/g)  || []).length,
+        "\t":(line.match(/\t/g) || []).length,
+        ":": (line.match(/:/g)  || []).length,
+    };
+    let best = "|", bestCount = 0;
+    for (const [d, cnt] of Object.entries(scores)) {
+        if (cnt > bestCount) { bestCount = cnt; best = d; }
+    }
+    return bestCount > 0 ? best : " ";
+}
+
+function parseSmartImport(text) {
+    const FIELDS = ["email","password","imapHost","imapPort","imapUser","imapPass","secure"];
+    const lines = text.split("\n").map(l => l.trim()).filter(Boolean);
+    if (!lines.length) return [];
+    const delim = detectDelimiter(text);
+    return lines.map(line => {
+        const parts = line.split(delim).map(p => p.trim());
+        const obj = {};
+        FIELDS.forEach((f, i) => { obj[f] = parts[i] || ""; });
+        return obj;
+    }).filter(r => r.email && r.email.includes("@"));
+}
+
+function smartImportPreview() {
+    const text = document.getElementById("importMailRows")?.value || "";
+    _smartImportRows = parseSmartImport(text);
+
+    const previewEl  = document.getElementById("importPreview");
+    const confirmBtn = document.getElementById("importConfirmBtn");
+    if (!previewEl) return;
+
+    if (!_smartImportRows.length) {
+        previewEl.innerHTML = "";
+        if (confirmBtn) confirmBtn.style.display = "none";
+        return;
+    }
+
+    const LABELS = ["Email","Password","IMAP Host","Port","IMAP User","IMAP Pass","Secure"];
+    const KEYS   = ["email","password","imapHost","imapPort","imapUser","imapPass","secure"];
+
+    let html = `<div class="import-preview-header">Xem trước — ${_smartImportRows.length} dòng</div>`;
+    html += `<div class="import-table-wrap"><table class="import-preview-table">`;
+    html += `<thead><tr>${LABELS.map(l => `<th>${l}</th>`).join("")}</tr></thead><tbody>`;
+
+    const rows = _smartImportRows.slice(0, 10);
+    rows.forEach(row => {
+        html += `<tr>${KEYS.map(k => `<td>${escapeHtml(row[k] || "")}</td>`).join("")}</tr>`;
+    });
+    if (_smartImportRows.length > 10) {
+        html += `<tr><td colspan="${KEYS.length}" class="preview-more">... và ${_smartImportRows.length - 10} dòng nữa</td></tr>`;
+    }
+    html += `</tbody></table></div>`;
+    previewEl.innerHTML = html;
+
+    if (confirmBtn) {
+        confirmBtn.style.display = "";
+        confirmBtn.textContent = `Import ${_smartImportRows.length} dòng`;
+    }
+}
+
+async function confirmSmartImport() {
+    if (!_smartImportRows.length) return;
+    const btn = document.getElementById("importConfirmBtn");
+    if (btn) { btn.disabled = true; btn.textContent = "Đang import..."; }
+    const rows = _smartImportRows.map(r =>
+        [r.email, r.password, r.imapHost, r.imapPort, r.imapUser, r.imapPass, r.secure].join("|")
+    ).join("\n");
+    try {
+        const res = await adminFetch("/api/accounts/import-mail", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ rows })
+        });
+        const data = await safeJson(res);
+        if (!res.ok) { alert(data.message); return; }
+        showToast(`Tạo mới: ${data.created}, Cập nhật: ${data.updated}`);
+        document.getElementById("importMailRows").value = "";
+        document.getElementById("importPreview").innerHTML = "";
+        _smartImportRows = [];
+        if (btn) btn.style.display = "none";
+        await loadAccounts();
+    } catch (err) { if (err.message !== "Session expired") alert("Lỗi kết nối"); }
+    finally { if (btn) { btn.disabled = false; btn.textContent = `Import ${_smartImportRows.length} dòng`; } }
+}
+
+function downloadTemplate() {
+    const lines = [
+        "email|password|imapHost|imapPort|imapUser|imapPass|secure",
+        "abc@gmail.com|matkhau|imap.gmail.com|993|abc@gmail.com|app-password-16-chars|true",
+        "xyz@gmail.com|matkhau2||||app-password-2|"
+    ].join("\n");
+    const blob = new Blob([lines], { type: "text/plain;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url; a.download = "import-template.txt"; a.click();
+    URL.revokeObjectURL(url);
+}
+
 // ─── Export ───────────────────────────────────────────────────────────────────
 
 function exportAccounts() {
@@ -753,6 +871,46 @@ async function saveSettings() {
         }, 1500);
     } catch (err) { if (err.message !== "Session expired") { errEl.textContent = "Lỗi kết nối"; errEl.style.display = "block"; } }
     finally { btn.disabled = false; btn.textContent = "Lưu"; }
+}
+
+async function saveWorkerConfig() {
+    const workerUrl    = document.getElementById("st_workerUrl")?.value.trim() || "";
+    const workerSecret = document.getElementById("st_workerSecret")?.value.trim() || "";
+    const errEl = document.getElementById("st_workerError");
+    if (errEl) errEl.style.display = "none";
+
+    if (!workerUrl) {
+        if (errEl) { errEl.textContent = "Vui lòng nhập Worker URL"; errEl.style.display = "block"; }
+        return;
+    }
+
+    const btn = document.getElementById("st_workerSaveBtn");
+    if (btn) { btn.disabled = true; btn.textContent = "Đang lưu..."; }
+
+    try {
+        const res = await adminFetch("/api/settings/worker", {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ workerUrl, workerSecret })
+        });
+        const data = await safeJson(res);
+        if (!res.ok) {
+            if (errEl) { errEl.textContent = data.message; errEl.style.display = "block"; }
+            return;
+        }
+        workerBaseUrl = workerUrl;
+        showToast("Đã lưu Worker config");
+        // Update secret placeholder
+        if (workerSecret) {
+            const ws = document.getElementById("st_workerSecret");
+            if (ws) { ws.value = ""; ws.placeholder = "Secret đã lưu — để trống để giữ nguyên"; }
+        }
+    } catch (err) {
+        if (err.message !== "Session expired") {
+            if (errEl) { errEl.textContent = "Lỗi kết nối"; errEl.style.display = "block"; }
+        }
+    }
+    finally { if (btn) { btn.disabled = false; btn.textContent = "Lưu"; } }
 }
 
 // ─── IMAP Modal ───────────────────────────────────────────────────────────────

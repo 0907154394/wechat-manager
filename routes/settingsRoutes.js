@@ -51,9 +51,41 @@ router.put("/credentials", (req, res) => {
     res.json({ message: "Đã cập nhật thành công" });
 });
 
-// GET /api/settings/info — trả về username hiện tại (không trả password)
+// GET /api/settings/info — trả về username + worker config hiện tại
 router.get("/info", (_req, res) => {
-    res.json({ username: process.env.ADMIN_USERNAME || "admin" });
+    res.json({
+        username:  process.env.ADMIN_USERNAME || "admin",
+        workerUrl: process.env.WORKER_URL     || "",
+        hasSecret: !!(process.env.WORKER_SECRET)
+    });
+});
+
+// PUT /api/settings/worker — cập nhật Cloudflare Worker URL + secret
+router.put("/worker", (req, res) => {
+    const workerUrl    = String(req.body.workerUrl    || "").trim().replace(/\/$/, "");
+    const workerSecret = String(req.body.workerSecret || "").trim();
+
+    if (!workerUrl) {
+        return res.status(400).json({ message: "Thiếu Worker URL" });
+    }
+
+    try { new URL(workerUrl); } catch {
+        return res.status(400).json({ message: "Worker URL không hợp lệ" });
+    }
+
+    process.env.WORKER_URL    = workerUrl;
+    if (workerSecret) process.env.WORKER_SECRET = workerSecret;
+
+    const updates = { WORKER_URL: workerUrl };
+    if (workerSecret) updates.WORKER_SECRET = workerSecret;
+
+    try {
+        updateEnvFile(updates);
+    } catch (err) {
+        return res.status(500).json({ message: "Lưu .env thất bại: " + err.message });
+    }
+
+    res.json({ message: "Đã lưu Worker config" });
 });
 
 module.exports = router;

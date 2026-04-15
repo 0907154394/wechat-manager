@@ -83,6 +83,7 @@ function createWindow() {
         minWidth: 960,
         minHeight: 620,
         title: "WeChat Manager",
+        backgroundColor: "#060c18",
         ...(icon ? { icon } : {}),
         webPreferences: {
             nodeIntegration: false,
@@ -99,6 +100,12 @@ function createWindow() {
         const socket = net.createConnection(PORT, "127.0.0.1");
         socket.once("connect", () => {
             socket.destroy();
+            // Xoá token cũ → bắt buộc login lại mỗi lần mở app
+            mainWindow.webContents.once("did-navigate", () => {
+                mainWindow.webContents.executeJavaScript(
+                    'localStorage.removeItem("adminToken")'
+                ).catch(() => {});
+            });
             mainWindow.loadURL(`http://localhost:${PORT}`).catch(() => {});
         });
         socket.once("error", () => {
@@ -110,14 +117,7 @@ function createWindow() {
 
     mainWindow.once("ready-to-show", () => {
         mainWindow.show();
-        // Windows focus steal fix — setAlwaysOnTop trick forces the OS to grant focus
-        mainWindow.setAlwaysOnTop(true);
         mainWindow.focus();
-        mainWindow.webContents.focus();
-        setTimeout(() => {
-            mainWindow.setAlwaysOnTop(false);
-            mainWindow.focus();
-        }, 200);
     });
 
     // Đóng cửa sổ → thu vào tray, không thoát
