@@ -143,6 +143,25 @@ function createTray() {
         {
             label: "Thoát",
             click: () => app.quit()
+        },
+        { type: "separator" },
+        {
+            label: "Gỡ cài đặt...",
+            click: () => {
+                const uninstaller = path.join(path.dirname(app.getPath("exe")), "Uninstall WeChat Manager.exe");
+                dialog.showMessageBox({
+                    type: "warning",
+                    title: "Gỡ cài đặt",
+                    message: "Bạn có chắc muốn gỡ cài đặt WeChat Manager?",
+                    buttons: ["Gỡ cài đặt", "Huỷ"],
+                    defaultId: 1
+                }).then(result => {
+                    if (result.response === 0) {
+                        app.quit();
+                        setTimeout(() => { spawn(uninstaller, [], { detached: true, stdio: "ignore" }).unref(); }, 500);
+                    }
+                });
+            }
         }
     ]));
 
