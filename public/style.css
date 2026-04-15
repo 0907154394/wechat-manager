@@ -249,6 +249,26 @@ html, body {
     font-size: 12px;
     color: var(--red);
 }
+.health-error-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+}
+.health-fix-btn { white-space: nowrap; }
+.imap-err-link {
+    color: var(--red);
+    cursor: pointer;
+    text-decoration: underline dotted;
+    font-weight: 600;
+}
+.imap-err-link:hover { opacity: .8; }
+@keyframes cardPulse {
+    0%   { box-shadow: 0 0 0 0 rgba(239,68,68,.5); }
+    60%  { box-shadow: 0 0 0 8px rgba(239,68,68,0); }
+    100% { box-shadow: 0 0 0 0 rgba(239,68,68,0); }
+}
+.card-highlight { animation: cardPulse .8s ease-out 2; }
 
 /* IMAP error dot in table */
 .imap-err-dot {

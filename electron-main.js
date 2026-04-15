@@ -100,13 +100,8 @@ function createWindow() {
         const socket = net.createConnection(PORT, "127.0.0.1");
         socket.once("connect", () => {
             socket.destroy();
-            // Xoá token cũ → bắt buộc login lại mỗi lần mở app
-            mainWindow.webContents.once("did-navigate", () => {
-                mainWindow.webContents.executeJavaScript(
-                    'localStorage.removeItem("adminToken")'
-                ).catch(() => {});
-            });
-            mainWindow.loadURL(`http://localhost:${PORT}`).catch(() => {});
+            // Luôn mở thẳng login — không qua index
+            mainWindow.loadURL(`http://localhost:${PORT}/login.html`).catch(() => {});
         });
         socket.once("error", () => {
             socket.destroy();

@@ -77,9 +77,20 @@ function renderImapHealth() {
     }
     el.innerHTML = errors.map(([user, msg]) => `
         <div class="health-error-item">
-            <span class="health-user">${escapeHtml(user)}</span>
-            <span class="health-msg">${escapeHtml(msg)}</span>
+            <div class="health-error-row">
+                <div>
+                    <span class="health-user">${escapeHtml(user)}</span>
+                    <span class="health-msg">${escapeHtml(msg)}</span>
+                </div>
+                <button class="link-btn health-fix-btn" onclick="editImapByUser('${escapeJs(user)}')">Sửa IMAP</button>
+            </div>
         </div>`).join("");
+}
+
+function editImapByUser(imapUser) {
+    const acc = allAccounts.find(a => a.imapUser === imapUser || a.email === imapUser);
+    if (!acc) { showToast("Không tìm thấy tài khoản này"); return; }
+    editImap(acc._id, acc.imapUser || acc.email, acc.imapHost);
 }
 
 // ─── Init ─────────────────────────────────────────────────────────────────────
@@ -805,7 +816,7 @@ async function loadWorkerStatus() {
         if (res.ok && data.running) {
             badge.textContent = "ONLINE"; badge.className = "worker-badge online";
             const errCount = Object.keys(imapAccountErrors).length;
-            info.innerHTML = `Worker đang chạy — Accounts: <b>${data.activeAccounts || 0}</b> | Last run: <b>${data.lastRunAt || "-"}</b>${errCount ? ` | <span style="color:var(--red)">IMAP lỗi: ${errCount}</span>` : ""}`;
+            info.innerHTML = `Worker đang chạy — Accounts: <b>${data.activeAccounts || 0}</b> | Last run: <b>${data.lastRunAt || "-"}</b>${errCount ? ` | <a class="imap-err-link" onclick="goToImapHealth()">IMAP lỗi: ${errCount}</a>` : ""}`;
         } else {
             badge.textContent = "OFFLINE"; badge.className = "worker-badge offline";
             info.textContent = "Worker chưa chạy.";
@@ -827,6 +838,18 @@ async function loadWorkerStatus() {
             bar.style.display = "none";
         }
     } catch { /* bỏ qua nếu tunnel chưa chạy */ }
+}
+
+function goToImapHealth() {
+    showSection("settings");
+    setTimeout(() => {
+        const el = document.getElementById("imapHealthList");
+        if (el) {
+            el.scrollIntoView({ behavior: "smooth", block: "center" });
+            el.closest(".card").classList.add("card-highlight");
+            setTimeout(() => el.closest(".card").classList.remove("card-highlight"), 1500);
+        }
+    }, 120);
 }
 
 async function startWorker() {
