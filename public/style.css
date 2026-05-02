@@ -600,6 +600,9 @@ button:disabled { opacity: .55; cursor: not-allowed; transform: none; box-shadow
 .wechat-btn { background: #3b5bdb; }
 .wechat-btn:hover { background: #3451c7; }
 
+.gen-link-btn { background: rgba(20,184,166,.15); border: 1px solid rgba(20,184,166,.3); color: #2dd4bf; }
+.gen-link-btn:hover { background: #0d9488; color: #fff; border-color: #0d9488; }
+
 .link-btn   { background: rgba(91,124,247,.15); border: 1px solid var(--border-hi); color: var(--accent); }
 .link-btn:hover { background: var(--accent); color: #fff; border-color: var(--accent); }
 

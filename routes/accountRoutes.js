@@ -207,33 +207,23 @@ router.get("/", async (req, res) => {
         const query = showArchived ? { archived: true } : { archived: { $ne: true } };
         const accounts = await Account.find(query).sort({ createdAt: -1 });
         const now = Date.now();
-        const renewOps   = [];
-        const renewedAccs = [];
 
-        for (const a of accounts) {
-            const expired = !a.linkTokenExpiresAt || a.linkTokenExpiresAt.getTime() < now;
-            if (expired) {
-                const t = buildTokens();
-                a.linkToken          = t.linkToken;
-                a.linkTokenExpiresAt = t.linkTokenExpiresAt;
-                renewOps.push(
-                    Account.updateOne({ _id: a._id }, {
-                        linkToken:          t.linkToken,
-                        linkTokenExpiresAt: t.linkTokenExpiresAt
-                    })
-                );
-                renewedAccs.push(a);
-            }
-        }
+        // Xoá link đã hết hạn — không tự renew nữa, chờ user bấm "Tạo link"
+        const expiredIds = accounts
+            .filter(a => a.linkToken && a.linkTokenExpiresAt && a.linkTokenExpiresAt.getTime() < now)
+            .map(a => a._id);
 
-        if (renewOps.length) {
-            await Promise.all(renewOps);
-            // Đăng ký linkToken mới lên Cloudflare Worker
-            for (const a of renewedAccs) {
-                if (a.messageToken) {
-                    pushLinkToWorker(a.linkToken, a.messageToken, a.linkTokenExpiresAt);
+        if (expiredIds.length) {
+            await Account.updateMany(
+                { _id: { $in: expiredIds } },
+                { $set: { linkToken: "", linkTokenExpiresAt: null } }
+            );
+            accounts.forEach(a => {
+                if (expiredIds.some(id => id.equals(a._id))) {
+                    a.linkToken = "";
+                    a.linkTokenExpiresAt = null;
                 }
-            }
+            });
         }
 
         res.json(accounts);
@@ -377,6 +367,24 @@ router.put("/wechat-id/:id", async (req, res) => {
     }
 });
 
+
+// Tạo link mới theo yêu cầu (thay vì auto-renew)
+router.post("/:id/generate-link", async (req, res) => {
+    try {
+        const account = await Account.findById(req.params.id);
+        if (!account) return res.status(404).json({ message: "Không tìm thấy" });
+        const t = buildTokens();
+        account.linkToken          = t.linkToken;
+        account.linkTokenExpiresAt = t.linkTokenExpiresAt;
+        await account.save();
+        if (account.messageToken) {
+            pushLinkToWorker(t.linkToken, account.messageToken, t.linkTokenExpiresAt);
+        }
+        res.json({ linkToken: t.linkToken, linkTokenExpiresAt: t.linkTokenExpiresAt });
+    } catch (err) {
+        res.status(500).json({ message: err.message });
+    }
+});
 
 router.put("/generate-message-tokens", async (req, res) => {
     try {

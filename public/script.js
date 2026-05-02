@@ -279,6 +279,7 @@ function renderTable(data) {
                     : `<button class="sell-btn" onclick="sell('${a._id}')">Bán</button>`}
                 <button class="wechat-btn" onclick="updateWechatId('${a._id}')">WeChat ID</button>
                 <button class="link-btn" onclick="viewMessages('${a.messageToken || ""}')">OTP</button>
+                <button class="gen-link-btn" onclick="generateLink('${a._id}')">Tạo link</button>
                 <button class="link-btn" onclick="editImap('${a._id}', '${imapUser}', '${imapHost}')">IMAP</button>
                 <button class="delete-btn" onclick="deleteAccount('${a._id}')">Lưu trữ</button>
                 `}
@@ -838,6 +839,18 @@ async function loadWorkerStatus() {
             bar.style.display = "none";
         }
     } catch { /* bỏ qua nếu tunnel chưa chạy */ }
+}
+
+async function generateLink(id) {
+    try {
+        const res = await adminFetch(`/api/accounts/${id}/generate-link`, { method: "POST" });
+        if (res.ok) {
+            await loadAccounts();
+            showToast("Đã tạo link mới");
+        } else {
+            showToast("Lỗi tạo link");
+        }
+    } catch (err) { if (err.message !== "Session expired") showToast("Lỗi kết nối"); }
 }
 
 function goToImapHealth() {
