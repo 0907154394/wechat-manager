@@ -55,6 +55,11 @@ mongoose
     .then(() => {
         global._mongoStatus = "connected";
         console.log("MongoDB connected");
+        // Xoá toàn bộ link token cũ — từ v1.3.6 link chỉ tạo thủ công
+        Account.updateMany(
+            { linkToken: { $ne: "" } },
+            { $set: { linkToken: "", linkTokenExpiresAt: null } }
+        ).then(r => { if (r.modifiedCount) console.log(`[migration] cleared ${r.modifiedCount} old link tokens`); }).catch(() => {});
         startWorker();
         console.log("IMAP worker started");
     })
