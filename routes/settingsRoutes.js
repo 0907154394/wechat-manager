@@ -2,6 +2,7 @@ const express = require("express");
 const router = express.Router();
 const fs = require("fs");
 const path = require("path");
+const Settings = require("../models/Settings");
 
 // Cập nhật 1 key trong file .env (giữ nguyên các dòng khác)
 function updateEnvFile(updates) {
@@ -19,7 +20,7 @@ function updateEnvFile(updates) {
 }
 
 // PUT /api/settings/credentials
-router.put("/credentials", (req, res) => {
+router.put("/credentials", async (req, res) => {
     const currentPassword = String(req.body.currentPassword || "").trim();
     const newUsername     = String(req.body.newUsername     || "").trim();
     const newPassword     = String(req.body.newPassword     || "").trim();
@@ -47,6 +48,14 @@ router.put("/credentials", (req, res) => {
     } catch (err) {
         return res.status(500).json({ message: "Lưu file .env thất bại: " + err.message });
     }
+
+    // Đồng bộ lên MongoDB để máy kia cũng nhận được
+    try {
+        await Settings.bulkWrite([
+            { updateOne: { filter: { key: "ADMIN_USERNAME" }, update: { $set: { value: newUsername } }, upsert: true } },
+            { updateOne: { filter: { key: "ADMIN_PASSWORD" }, update: { $set: { value: newPassword } }, upsert: true } }
+        ]);
+    } catch { /* ignore nếu DB lỗi */ }
 
     res.json({ message: "Đã cập nhật thành công" });
 });

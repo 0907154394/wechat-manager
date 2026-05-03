@@ -55,11 +55,29 @@ mongoose
     .then(() => {
         global._mongoStatus = "connected";
         console.log("MongoDB connected");
+
+        // Load credentials từ MongoDB vào process.env (đồng bộ 2 máy)
+        const Settings = require("./models/Settings");
+        Settings.find({ key: { $in: ["ADMIN_USERNAME", "ADMIN_PASSWORD"] } }).then(docs => {
+            for (const d of docs) process.env[d.key] = d.value;
+            if (docs.length) console.log("[settings] credentials loaded from DB");
+            else {
+                // Lần đầu: lưu credentials từ .env lên DB
+                const u = process.env.ADMIN_USERNAME || "admin";
+                const p = process.env.ADMIN_PASSWORD || "admin123";
+                Settings.bulkWrite([
+                    { updateOne: { filter: { key: "ADMIN_USERNAME" }, update: { $setOnInsert: { key: "ADMIN_USERNAME", value: u } }, upsert: true } },
+                    { updateOne: { filter: { key: "ADMIN_PASSWORD" }, update: { $setOnInsert: { key: "ADMIN_PASSWORD", value: p } }, upsert: true } }
+                ]).catch(() => {});
+            }
+        }).catch(() => {});
+
         // Xoá toàn bộ link token cũ — từ v1.3.6 link chỉ tạo thủ công
         Account.updateMany(
             { linkToken: { $ne: "" } },
             { $set: { linkToken: "", linkTokenExpiresAt: null } }
         ).then(r => { if (r.modifiedCount) console.log(`[migration] cleared ${r.modifiedCount} old link tokens`); }).catch(() => {});
+
         startWorker();
         console.log("IMAP worker started");
     })

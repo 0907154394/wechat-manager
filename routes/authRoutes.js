@@ -2,8 +2,6 @@ const express = require("express");
 const router = express.Router();
 const { createToken } = require("../middleware/auth");
 
-const ADMIN_USERNAME = process.env.ADMIN_USERNAME || "admin";
-const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || "admin123";
 
 // ── Rate limiter: tối đa 5 lần thử / 15 phút / IP ───────────────────────
 const loginAttempts = new Map(); // ip → { count, resetAt }
@@ -51,6 +49,8 @@ router.post("/login", (req, res) => {
         return res.status(400).json({ message: "Thiếu tài khoản hoặc mật khẩu" });
     }
 
+    const ADMIN_USERNAME = process.env.ADMIN_USERNAME || "admin";
+    const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || "admin123";
     if (username !== ADMIN_USERNAME || password !== ADMIN_PASSWORD) {
         return res.status(401).json({ message: "Sai tài khoản hoặc mật khẩu" });
     }
