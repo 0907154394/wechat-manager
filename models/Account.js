@@ -79,6 +79,11 @@ const AccountSchema = new mongoose.Schema({
         default: null
     },
 
+    imapError: {
+        type: String,
+        default: ""
+    },
+
     // Lưu trữ thay vì xóa — giữ email trong DB để tránh tái sử dụng variant
     archived: {
         type: Boolean,

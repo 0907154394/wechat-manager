@@ -362,11 +362,19 @@ async function runWorkerOnce() {
             syncGroup(group.config, group.accounts)
                 .then(() => {
                     delete workerState.accountErrors[group.config.user];
+                    Account.updateMany(
+                        { imapUser: group.config.user, imapEnabled: true },
+                        { $set: { imapError: "" } }
+                    ).catch(() => {});
                 })
                 .catch(err => {
                     workerState.lastError = err.message;
                     workerState.accountErrors[group.config.user] = err.message;
                     console.error("IMAP sync error [%s]:", group.config.user, err.message);
+                    Account.updateMany(
+                        { imapUser: group.config.user, imapEnabled: true },
+                        { $set: { imapError: err.message } }
+                    ).catch(() => {});
                 })
         )
     );

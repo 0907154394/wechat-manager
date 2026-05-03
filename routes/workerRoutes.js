@@ -14,8 +14,7 @@ function safeStatus() {
         running:        s.running        || false,
         activeAccounts: s.activeAccounts || 0,
         lastRunAt:      s.lastRunAt      || null,
-        lastError:      s.lastError      || null,
-        accountErrors:  s.accountErrors  || {}
+        lastError:      s.lastError      || null
     };
 }
 

@@ -6,7 +6,6 @@ let PAGE_SIZE = 50;
 let selectedExcelFile = null;
 let publicBaseUrl = "";   // Cloudflare tunnel URL (changes on restart)
 let workerBaseUrl = "";   // Cloudflare Worker URL (stable)
-let imapAccountErrors = {}; // imapUser → error message
 
 // ─── Auth ─────────────────────────────────────────────────────────────────────
 
@@ -70,19 +69,19 @@ async function loadSettingsSection() {
 function renderImapHealth() {
     const el = document.getElementById("imapHealthList");
     if (!el) return;
-    const errors = Object.entries(imapAccountErrors).filter(([, v]) => v);
+    const errors = allAccounts.filter(a => a.imapError);
     if (!errors.length) {
         el.innerHTML = '<span class="health-ok">Tất cả IMAP hoạt động bình thường.</span>';
         return;
     }
-    el.innerHTML = errors.map(([user, msg]) => `
+    el.innerHTML = errors.map(a => `
         <div class="health-error-item">
             <div class="health-error-row">
                 <div>
-                    <span class="health-user">${escapeHtml(user)}</span>
-                    <span class="health-msg">${escapeHtml(msg)}</span>
+                    <span class="health-user">${escapeHtml(a.imapUser || a.email)}</span>
+                    <span class="health-msg">${escapeHtml(a.imapError)}</span>
                 </div>
-                <button class="link-btn health-fix-btn" onclick="editImapByUser('${escapeJs(user)}')">Sửa IMAP</button>
+                <button class="link-btn health-fix-btn" onclick="editImapByUser('${escapeJs(a.imapUser || a.email)}')">Sửa IMAP</button>
             </div>
         </div>`).join("");
 }
@@ -164,6 +163,7 @@ async function loadAccounts() {
         currentPage = 1;
         renderTable(filteredAccounts);
         updateStats(allAccounts);
+        renderImapHealth();
     } catch (err) {
         if (err.message !== "Session expired") { console.error(err); alert("Lỗi kết nối server"); }
     }
@@ -228,8 +228,8 @@ function renderTable(data) {
         const checked = selectedIds.has(a._id) ? "checked" : "";
         const imapUser = escapeJs(a.imapUser || a.email || "");
         const imapHost = escapeJs(a.imapHost || "");
-        const hasImapErr = !!(imapAccountErrors[a.imapUser] || imapAccountErrors[a.email]);
-        const errTitle = hasImapErr ? escapeHtml(imapAccountErrors[a.imapUser] || imapAccountErrors[a.email] || "IMAP lỗi") : "";
+        const hasImapErr = !!(a.imapError);
+        const errTitle = hasImapErr ? escapeHtml(a.imapError) : "";
 
         html += `
         <tr>
@@ -807,16 +807,10 @@ async function loadWorkerStatus() {
         const badge = document.getElementById("workerStatusBadge");
         const info  = document.getElementById("workerInfo");
 
-        // Update IMAP error map & refresh health list if on settings page
-        if (data.accountErrors) {
-            imapAccountErrors = data.accountErrors;
-            renderImapHealth();
-        }
-
         if (!badge || !info) return;
         if (res.ok && data.running) {
             badge.textContent = "ONLINE"; badge.className = "worker-badge online";
-            const errCount = Object.keys(imapAccountErrors).length;
+            const errCount = allAccounts.filter(a => a.imapError).length;
             info.innerHTML = `Worker đang chạy — Accounts: <b>${data.activeAccounts || 0}</b> | Last run: <b>${data.lastRunAt || "-"}</b>${errCount ? ` | <a class="imap-err-link" onclick="goToImapHealth()">IMAP lỗi: ${errCount}</a>` : ""}`;
         } else {
             badge.textContent = "OFFLINE"; badge.className = "worker-badge offline";
