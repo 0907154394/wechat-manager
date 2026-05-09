@@ -104,7 +104,7 @@ window.onload = async () => {
     // - Cập nhật bộ đếm "còn X phút" trên UI
     // - Tạo link mới thay thế link đã hết hạn (server tự gia hạn)
     setInterval(async () => {
-        await loadAccounts();
+        await loadAccounts(false);
     }, 60 * 1000);
 };
 
@@ -152,7 +152,7 @@ function showSelectedFileName() {
 
 let isArchivedView = false;
 
-async function loadAccounts() {
+async function loadAccounts(resetPage = true) {
     try {
         const url = isArchivedView ? "/api/accounts?archived=true" : "/api/accounts";
         const res = await adminFetch(url);
@@ -160,7 +160,7 @@ async function loadAccounts() {
         if (!res.ok) { alert(data.message || "Không tải được dữ liệu"); return; }
         allAccounts = Array.isArray(data) ? data : [];
         filteredAccounts = [...allAccounts];
-        currentPage = 1;
+        if (resetPage) currentPage = 1;
         renderTable(filteredAccounts);
         updateStats(allAccounts);
         renderImapHealth();
