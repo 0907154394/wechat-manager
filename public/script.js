@@ -271,17 +271,17 @@ function renderTable(data) {
 
             <td class="action-group">
                 ${isArchivedView ? `
-                <button class="sell-btn" onclick="restoreAccount('${a._id}')">Khôi phục</button>
-                <button class="delete-btn" onclick="hardDeleteAccount('${a._id}')">Xóa cứng</button>
+                <button class="sell-btn" onclick="restoreAccount('${a._id}')"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle;margin-right:3px"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-4.5"/></svg>Khôi phục</button>
+                <button class="delete-btn" onclick="hardDeleteAccount('${a._id}')"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle;margin-right:3px"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/></svg>Xóa cứng</button>
                 ` : `
                 ${a.status === "DA BAN"
-                    ? `<button class="unsell-btn" onclick="unsell('${a._id}')">Hủy bán</button>`
-                    : `<button class="sell-btn" onclick="sell('${a._id}')">Bán</button>`}
-                <button class="wechat-btn" onclick="updateWechatId('${a._id}')">WeChat ID</button>
-                <button class="link-btn" onclick="viewMessages('${a.messageToken || ""}')">OTP</button>
-                <button class="gen-link-btn" onclick="generateLink('${a._id}')">Tạo link</button>
-                <button class="link-btn" onclick="editImap('${a._id}', '${imapUser}', '${imapHost}')">IMAP</button>
-                <button class="delete-btn" onclick="deleteAccount('${a._id}')">Lưu trữ</button>
+                    ? `<button class="unsell-btn" onclick="unsell('${a._id}')"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle;margin-right:3px"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-4.5"/></svg>Hủy bán</button>`
+                    : `<button class="sell-btn" onclick="sell('${a._id}')"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle;margin-right:3px"><polyline points="20 6 9 17 4 12"/></svg>Bán</button>`}
+                <button class="wechat-btn" onclick="updateWechatId('${a._id}')"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" style="vertical-align:middle;margin-right:3px"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>WeChat ID</button>
+                <button class="link-btn" onclick="viewMessages('${a.messageToken || ""}')"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle;margin-right:3px"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>OTP</button>
+                <button class="gen-link-btn" onclick="generateLink('${a._id}')"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle;margin-right:3px"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>Tạo link</button>
+                <button class="link-btn" onclick="editImap('${a._id}', '${imapUser}', '${imapHost}')"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle;margin-right:3px"><rect x="2" y="4" width="20" height="16" rx="2"/><polyline points="22,6 12,13 2,6"/></svg>IMAP</button>
+                <button class="delete-btn" onclick="deleteAccount('${a._id}')"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle;margin-right:3px"><polyline points="21 8 21 21 3 21 3 8"/><rect x="1" y="3" width="22" height="5"/><line x1="10" y1="12" x2="14" y2="12"/></svg>Lưu trữ</button>
                 `}
             </td>
         </tr>`;
