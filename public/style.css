@@ -733,19 +733,16 @@ tbody tr:hover td { background: rgba(91,124,247,.04); }
 }
 
 .action-group {
-    display: flex;
-    flex-wrap: wrap;
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
     gap: 4px;
-    justify-content: center;
-    justify-content: center;
-    align-items: center;
-    min-width: 230px;
+    min-width: 220px;
 }
 
 .action-group button {
-    min-width: 62px;
+    min-width: unset;
     min-height: 28px;
-    padding: 4px 8px;
+    padding: 4px 6px;
     border-radius: var(--radius-sm);
     font-size: 11px;
 }
