@@ -35,11 +35,16 @@ function pushToWorker(messageToken, content, email) {
 let workerState = {
     running: false,
     lastRunAt: null,
+    lastSuccessAt: null,
     activeAccounts: 0,
     intervalId: null,
+    watchdogId: null,
     lastError: "",
     accountErrors: {}   // imapUser → error message
 };
+
+const WATCHDOG_INTERVAL = 5 * 60 * 1000;  // kiểm tra mỗi 5 phút
+const WATCHDOG_TIMEOUT  = 15 * 60 * 1000; // restart nếu không sync được trong 15 phút
 
 // Chỉ hiện lỗi sau 3 lần fail liên tiếp (~1 phút) — tránh báo lỗi transient
 const failCounts = new Map(); // imapUser → số lần fail liên tiếp
@@ -367,6 +372,7 @@ async function runWorkerOnce() {
                 .then(() => {
                     failCounts.delete(group.config.user);
                     delete workerState.accountErrors[group.config.user];
+                    workerState.lastSuccessAt = new Date().toISOString();
                     Account.updateMany(
                         { imapUser: group.config.user, imapEnabled: true },
                         { $set: { imapError: "" } }
@@ -395,6 +401,7 @@ function startWorker() {
 
     workerState.running = true;
     workerState.lastError = "";
+    workerState.lastSuccessAt = new Date().toISOString(); // khởi tạo để watchdog không restart ngay
 
     workerState.intervalId = setInterval(async () => {
         try {
@@ -404,6 +411,17 @@ function startWorker() {
             console.error("Worker loop error:", err.message);
         }
     }, 20000);
+
+    // Watchdog: tự restart nếu không có sync thành công trong WATCHDOG_TIMEOUT
+    workerState.watchdogId = setInterval(() => {
+        if (!workerState.running || !workerState.lastSuccessAt) return;
+        const elapsed = Date.now() - new Date(workerState.lastSuccessAt).getTime();
+        if (elapsed > WATCHDOG_TIMEOUT) {
+            console.warn("[Watchdog] Không sync được trong 15 phút — đang tự khởi động lại IMAP worker...");
+            stopWorker();
+            startWorker();
+        }
+    }, WATCHDOG_INTERVAL);
 
     runWorkerOnce().catch(err => {
         workerState.lastError = err.message;
@@ -417,6 +435,10 @@ function stopWorker() {
     if (workerState.intervalId) {
         clearInterval(workerState.intervalId);
         workerState.intervalId = null;
+    }
+    if (workerState.watchdogId) {
+        clearInterval(workerState.watchdogId);
+        workerState.watchdogId = null;
     }
 
     workerState.running = false;

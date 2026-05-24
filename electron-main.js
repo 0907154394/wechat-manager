@@ -28,7 +28,19 @@ function loadConfig() {
         return true;
     } catch {}
 
-    // 2. Fall back to bundled .env — migrate it to config.json automatically
+    // 2. Fall back to bundled app-config.json (config baked into installer)
+    try {
+        const cfg = JSON.parse(fs.readFileSync(path.join(__dirname, "app-config.json"), "utf8"));
+        if (cfg.MONGODB_URI) {
+            for (const [k, v] of Object.entries(cfg)) process.env[k] = String(v);
+            saveConfig(cfg);
+            process.env.CONFIG_LOADED = "1";
+            console.log("[Config] Loaded app-config.json → migrated to config.json");
+            return true;
+        }
+    } catch {}
+
+    // 3. Fall back to bundled .env (legacy dev fallback)
     try {
         const content = fs.readFileSync(path.join(__dirname, ".env"), "utf8");
         const cfg = {};
@@ -60,9 +72,7 @@ function saveConfig(cfg) {
 
 // IPC: setup form submits config → save → relaunch
 ipcMain.handle("save-config", async (_, cfg) => {
-    if (!cfg.MONGODB_URI)     return { ok: false, error: "Thiếu MongoDB URI" };
-    if (!cfg.ADMIN_USERNAME)  return { ok: false, error: "Thiếu tài khoản admin" };
-    if (!cfg.ADMIN_PASSWORD)  return { ok: false, error: "Thiếu mật khẩu" };
+    if (!cfg.MONGODB_URI) return { ok: false, error: "Thiếu MongoDB URI" };
     for (const [k, v] of Object.entries(cfg)) if (v) process.env[k] = v;
     if (!saveConfig(cfg)) return { ok: false, error: "Không thể lưu file config" };
     setTimeout(() => { app.relaunch(); app.quit(); }, 400);

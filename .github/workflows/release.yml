@@ -21,6 +21,9 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Create app-config.json from secret
+        run: echo '${{ secrets.APP_CONFIG }}' > app-config.json
+
       - name: Build and publish
         env:
           GH_TOKEN: ${{ secrets.GH_PAT }}

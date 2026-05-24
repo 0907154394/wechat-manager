@@ -4,3 +4,4 @@ duckdns-update.ps1
 dist/
 cloudflare-url.txt
 cloudflared.exe
+app-config.json

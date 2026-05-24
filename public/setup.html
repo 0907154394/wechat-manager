@@ -180,44 +180,19 @@
         autocomplete="off"
         spellcheck="false"
       >
+      <div class="hint">Tìm trong MongoDB Atlas → Connect → Drivers</div>
     </div>
 
     <hr class="divider">
 
     <div class="field">
-      <label for="adminUser">Tài khoản Admin<span class="required">*</span></label>
-      <input
-        type="text"
-        id="adminUser"
-        required
-        placeholder="admin"
-        value="admin"
-        autocomplete="off"
-      >
-    </div>
-
-    <div class="field">
-      <label for="adminPass">Mật khẩu Admin<span class="required">*</span></label>
-      <input
-        type="password"
-        id="adminPass"
-        required
-        placeholder="Ít nhất 6 ký tự"
-        autocomplete="new-password"
-      >
-    </div>
-
-    <hr class="divider">
-
-    <div class="field">
-      <label for="ghPat">GitHub PAT <span style="color:#7e96b8;font-weight:400">(tuỳ chọn)</span></label>
+      <label for="ghPat">GitHub PAT <span style="color:#7e96b8;font-weight:400">(tuỳ chọn — dùng để nhận cập nhật tự động)</span></label>
       <input
         type="password"
         id="ghPat"
-        placeholder="ghp_... — dùng để nhận bản cập nhật tự động"
+        placeholder="ghp_..."
         autocomplete="off"
       >
-      <div class="hint">Tạo tại GitHub → Settings → Developer settings → Personal access tokens. Chọn scope: repo (read)</div>
     </div>
 
     <button type="submit" class="btn" id="submitBtn">Lưu &amp; Khởi động</button>
@@ -240,12 +215,8 @@ document.getElementById("setupForm").addEventListener("submit", async (e) => {
 
     const config = {
         MONGODB_URI: document.getElementById("mongoUri").value.trim(),
-        ADMIN_USERNAME: document.getElementById("adminUser").value.trim(),
-        ADMIN_PASSWORD: document.getElementById("adminPass").value,
         GH_PAT: document.getElementById("ghPat").value.trim()
     };
-
-    // Remove empty GH_PAT
     if (!config.GH_PAT) delete config.GH_PAT;
 
     try {
