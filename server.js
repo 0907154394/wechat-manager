@@ -11,6 +11,7 @@ process.on("unhandledRejection", err => {
 
 // Load .env thủ công (không cần dotenv package)
 (function loadEnv() {
+    if (process.env.CONFIG_LOADED) return; // already loaded by electron-main
     const envPath = path.join(__dirname, ".env");
     if (!fs.existsSync(envPath)) return;
     for (const line of fs.readFileSync(envPath, "utf8").split("\n")) {

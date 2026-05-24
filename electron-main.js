@@ -1,4 +1,4 @@
-const { app, BrowserWindow, Tray, Menu, dialog } = require("electron");
+const { app, BrowserWindow, Tray, Menu, dialog, ipcMain } = require("electron");
 const path = require("path");
 const { spawn } = require("child_process");
 const fs   = require("fs");
@@ -10,6 +10,64 @@ const PORT = 3000;
 let mainWindow = null;
 let tray = null;
 let cfProcess = null;
+let setupWindow = null;
+let userDataPath = null;
+let configFile = null;
+
+function initPaths() {
+    userDataPath = app.getPath("userData");
+    configFile = path.join(userDataPath, "config.json");
+}
+
+function loadConfig() {
+    // 1. Try %APPDATA%/config.json
+    try {
+        const cfg = JSON.parse(fs.readFileSync(configFile, "utf8"));
+        for (const [k, v] of Object.entries(cfg)) process.env[k] = String(v);
+        process.env.CONFIG_LOADED = "1";
+        return true;
+    } catch {}
+
+    // 2. Fall back to bundled .env — migrate it to config.json automatically
+    try {
+        const content = fs.readFileSync(path.join(__dirname, ".env"), "utf8");
+        const cfg = {};
+        for (const line of content.split(/\r?\n/)) {
+            const m = line.match(/^([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*)$/);
+            if (m) { cfg[m[1]] = m[2].trim().replace(/^["']|["']$/g, ""); process.env[m[1]] = cfg[m[1]]; }
+        }
+        if (cfg.MONGODB_URI) {
+            saveConfig(cfg);
+            process.env.CONFIG_LOADED = "1";
+            console.log("[Config] Migrated .env → config.json");
+            return true;
+        }
+    } catch {}
+
+    return false;
+}
+
+function saveConfig(cfg) {
+    try {
+        fs.mkdirSync(userDataPath, { recursive: true });
+        fs.writeFileSync(configFile, JSON.stringify(cfg, null, 2), "utf8");
+        return true;
+    } catch (err) {
+        console.error("[Config] Save error:", err.message);
+        return false;
+    }
+}
+
+// IPC: setup form submits config → save → relaunch
+ipcMain.handle("save-config", async (_, cfg) => {
+    if (!cfg.MONGODB_URI)     return { ok: false, error: "Thiếu MongoDB URI" };
+    if (!cfg.ADMIN_USERNAME)  return { ok: false, error: "Thiếu tài khoản admin" };
+    if (!cfg.ADMIN_PASSWORD)  return { ok: false, error: "Thiếu mật khẩu" };
+    for (const [k, v] of Object.entries(cfg)) if (v) process.env[k] = v;
+    if (!saveConfig(cfg)) return { ok: false, error: "Không thể lưu file config" };
+    setTimeout(() => { app.relaunch(); app.quit(); }, 400);
+    return { ok: true };
+});
 
 // Bắt lỗi uncaught trong main process — tránh Electron hiện dialog lỗi
 process.on("uncaughtException", err => {
@@ -122,6 +180,27 @@ function createWindow() {
     });
 }
 
+// ── Setup Window ──────────────────────────────────────────────────────────
+function createSetupWindow() {
+    const icon = getIconPath();
+    setupWindow = new BrowserWindow({
+        width: 520,
+        height: 660,
+        resizable: false,
+        title: "WeChat Manager — Thiết lập",
+        backgroundColor: "#060c18",
+        ...(icon ? { icon } : {}),
+        webPreferences: {
+            preload: path.join(__dirname, "preload.js"),
+            nodeIntegration: false,
+            contextIsolation: true
+        }
+    });
+    setupWindow.setMenu(null);
+    setupWindow.loadFile(path.join(__dirname, "public", "setup.html"));
+    setupWindow.once("closed", () => { setupWindow = null; });
+}
+
 // ── System Tray ───────────────────────────────────────────────────────────
 function createTray() {
     const icon = getIconPath();
@@ -135,6 +214,13 @@ function createTray() {
             click: () => { mainWindow.show(); mainWindow.focus(); }
         },
         { type: "separator" },
+        {
+            label: "Cài đặt kết nối...",
+            click: () => {
+                if (setupWindow) { setupWindow.focus(); return; }
+                createSetupWindow();
+            }
+        },
         {
             label: "Thoát",
             click: () => app.quit()
@@ -168,6 +254,12 @@ function setupAutoUpdater() {
     autoUpdater.autoDownload = true;
     autoUpdater.autoInstallOnAppQuit = true;
     autoUpdater.allowDowngrade = false;
+
+    // Xác thực với GitHub private repo
+    const ghToken = process.env.GH_PAT || process.env.GH_TOKEN;
+    if (ghToken) {
+        autoUpdater.requestHeaders = { Authorization: `token ${ghToken}` };
+    }
 
     autoUpdater.on("update-available", info => {
         dialog.showMessageBox({
@@ -232,10 +324,18 @@ if (!gotLock) {
 
     // ── App lifecycle ─────────────────────────────────────────────────────
     app.whenReady().then(async () => {
+        initPaths();
+        const hasConfig = loadConfig();
+
+        if (!hasConfig) {
+            createSetupWindow();
+            return;
+        }
+
         // 1. Khởi động server
         startServer();
 
-        // 3. Sau 9 giây kiểm tra MongoDB — nếu lỗi thì hiện dialog cảnh báo
+        // 2. Sau 9 giây kiểm tra MongoDB — nếu lỗi thì hiện dialog cảnh báo
         setTimeout(() => {
             const status = global._mongoStatus || "";
             if (status.startsWith("failed")) {
@@ -244,17 +344,17 @@ if (!gotLock) {
                     type: "error",
                     title: "Lỗi kết nối Database",
                     message: "Không kết nối được MongoDB!",
-                    detail: `${errMsg}\n\nKiểm tra:\n• File .env có đúng MONGO_URI không\n• MongoDB có đang chạy không (Services → MongoDB)`
+                    detail: `${errMsg}\n\nKiểm tra MongoDB URI trong Cài đặt kết nối (chuột phải tray icon).`
                 });
             }
         }, 9000);
 
-        // 4. Khởi động tunnel + cửa sổ + tray
+        // 3. Khởi động tunnel + cửa sổ + tray
         startTunnel();
         createWindow();
         createTray();
 
-        // 5. Kiểm tra update
+        // 4. Kiểm tra update
         setupAutoUpdater();
     });
 

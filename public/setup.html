@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>WeChat Manager — Thiết lập</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: #060c18;
+    color: #dde6f5;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    font-size: 14px;
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+  }
+
+  .card {
+    background: #0b1628;
+    border: 1px solid rgba(99,130,220,.14);
+    border-radius: 12px;
+    padding: 40px 36px;
+    width: 100%;
+    max-width: 460px;
+  }
+
+  .header {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    margin-bottom: 28px;
+  }
+
+  .logo-box {
+    width: 36px;
+    height: 36px;
+    border-radius: 8px;
+    background: linear-gradient(135deg, #5b7cf7, #9b59f7);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    font-size: 18px;
+    color: #fff;
+    flex-shrink: 0;
+  }
+
+  .header-text h1 {
+    font-size: 18px;
+    font-weight: 700;
+    color: #dde6f5;
+    line-height: 1.2;
+  }
+
+  .header-text p {
+    font-size: 13px;
+    color: #7e96b8;
+    margin-top: 2px;
+  }
+
+  .field {
+    margin-bottom: 18px;
+  }
+
+  label {
+    display: block;
+    font-size: 13px;
+    font-weight: 500;
+    color: #7e96b8;
+    margin-bottom: 6px;
+  }
+
+  label span.required {
+    color: #f75b5b;
+    margin-left: 2px;
+  }
+
+  input {
+    width: 100%;
+    background: #0f1e35;
+    border: 1px solid rgba(99,130,220,.14);
+    border-radius: 8px;
+    padding: 10px 14px;
+    color: #dde6f5;
+    font-size: 14px;
+    outline: none;
+    transition: border-color .15s;
+  }
+
+  input:focus {
+    border-color: #5b7cf7;
+  }
+
+  input::placeholder {
+    color: #3d5070;
+  }
+
+  .hint {
+    font-size: 12px;
+    color: #7e96b8;
+    margin-top: 6px;
+    line-height: 1.5;
+  }
+
+  .btn {
+    width: 100%;
+    padding: 12px;
+    background: #5b7cf7;
+    color: #fff;
+    border: none;
+    border-radius: 8px;
+    font-size: 15px;
+    font-weight: 600;
+    cursor: pointer;
+    margin-top: 8px;
+    transition: background .15s, opacity .15s;
+  }
+
+  .btn:hover:not(:disabled) {
+    background: #4a6ae0;
+  }
+
+  .btn:disabled {
+    opacity: .6;
+    cursor: default;
+  }
+
+  #errMsg {
+    display: none;
+    background: rgba(247,91,91,.12);
+    border: 1px solid rgba(247,91,91,.3);
+    border-radius: 8px;
+    padding: 10px 14px;
+    color: #f75b5b;
+    font-size: 13px;
+    margin-top: 14px;
+  }
+
+  #successMsg {
+    display: none;
+    background: rgba(91,124,247,.12);
+    border: 1px solid rgba(91,124,247,.3);
+    border-radius: 8px;
+    padding: 10px 14px;
+    color: #5b7cf7;
+    font-size: 13px;
+    text-align: center;
+    margin-top: 14px;
+  }
+
+  .divider {
+    border: none;
+    border-top: 1px solid rgba(99,130,220,.14);
+    margin: 22px 0;
+  }
+</style>
+</head>
+<body>
+<div class="card">
+  <div class="header">
+    <div class="logo-box">W</div>
+    <div class="header-text">
+      <h1>WeChat Manager</h1>
+      <p>Thiết lập kết nối</p>
+    </div>
+  </div>
+
+  <form id="setupForm">
+    <div class="field">
+      <label for="mongoUri">MongoDB URI<span class="required">*</span></label>
+      <input
+        type="text"
+        id="mongoUri"
+        required
+        placeholder="mongodb+srv://user:pass@cluster..."
+        autocomplete="off"
+        spellcheck="false"
+      >
+    </div>
+
+    <hr class="divider">
+
+    <div class="field">
+      <label for="adminUser">Tài khoản Admin<span class="required">*</span></label>
+      <input
+        type="text"
+        id="adminUser"
+        required
+        placeholder="admin"
+        value="admin"
+        autocomplete="off"
+      >
+    </div>
+
+    <div class="field">
+      <label for="adminPass">Mật khẩu Admin<span class="required">*</span></label>
+      <input
+        type="password"
+        id="adminPass"
+        required
+        placeholder="Ít nhất 6 ký tự"
+        autocomplete="new-password"
+      >
+    </div>
+
+    <hr class="divider">
+
+    <div class="field">
+      <label for="ghPat">GitHub PAT <span style="color:#7e96b8;font-weight:400">(tuỳ chọn)</span></label>
+      <input
+        type="password"
+        id="ghPat"
+        placeholder="ghp_... — dùng để nhận bản cập nhật tự động"
+        autocomplete="off"
+      >
+      <div class="hint">Tạo tại GitHub → Settings → Developer settings → Personal access tokens. Chọn scope: repo (read)</div>
+    </div>
+
+    <button type="submit" class="btn" id="submitBtn">Lưu &amp; Khởi động</button>
+
+    <div id="errMsg"></div>
+    <div id="successMsg">Đang khởi động lại...</div>
+  </form>
+</div>
+
+<script>
+document.getElementById("setupForm").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const btn = document.getElementById("submitBtn");
+    const errDiv = document.getElementById("errMsg");
+    const successDiv = document.getElementById("successMsg");
+
+    btn.disabled = true;
+    btn.textContent = "Đang lưu...";
+    errDiv.style.display = "none";
+
+    const config = {
+        MONGODB_URI: document.getElementById("mongoUri").value.trim(),
+        ADMIN_USERNAME: document.getElementById("adminUser").value.trim(),
+        ADMIN_PASSWORD: document.getElementById("adminPass").value,
+        GH_PAT: document.getElementById("ghPat").value.trim()
+    };
+
+    // Remove empty GH_PAT
+    if (!config.GH_PAT) delete config.GH_PAT;
+
+    try {
+        const result = await window.electronAPI.saveConfig(config);
+        if (result.ok) {
+            successDiv.style.display = "block";
+            btn.textContent = "Thành công!";
+        } else {
+            errDiv.textContent = result.error || "Lỗi không xác định";
+            errDiv.style.display = "block";
+            btn.disabled = false;
+            btn.textContent = "Lưu & Khởi động";
+        }
+    } catch (err) {
+        errDiv.textContent = err.message;
+        errDiv.style.display = "block";
+        btn.disabled = false;
+        btn.textContent = "Lưu & Khởi động";
+    }
+});
+</script>
+</body>
+</html>
