@@ -41,6 +41,10 @@ let workerState = {
     accountErrors: {}   // imapUser → error message
 };
 
+// Chỉ hiện lỗi sau 3 lần fail liên tiếp (~1 phút) — tránh báo lỗi transient
+const failCounts = new Map(); // imapUser → số lần fail liên tiếp
+const FAIL_THRESHOLD = 3;
+
 // Decode base64 email body (handles line-wrapped base64)
 function decodeBase64Body(str) {
     try {
@@ -361,6 +365,7 @@ async function runWorkerOnce() {
         [...groups.values()].map(group =>
             syncGroup(group.config, group.accounts)
                 .then(() => {
+                    failCounts.delete(group.config.user);
                     delete workerState.accountErrors[group.config.user];
                     Account.updateMany(
                         { imapUser: group.config.user, imapEnabled: true },
@@ -368,13 +373,18 @@ async function runWorkerOnce() {
                     ).catch(() => {});
                 })
                 .catch(err => {
+                    const user = group.config.user;
+                    const count = (failCounts.get(user) || 0) + 1;
+                    failCounts.set(user, count);
                     workerState.lastError = err.message;
-                    workerState.accountErrors[group.config.user] = err.message;
-                    console.error("IMAP sync error [%s]:", group.config.user, err.message);
-                    Account.updateMany(
-                        { imapUser: group.config.user, imapEnabled: true },
-                        { $set: { imapError: err.message } }
-                    ).catch(() => {});
+                    console.error("IMAP sync error [%s] (fail %d/%d):", user, count, FAIL_THRESHOLD, err.message);
+                    if (count >= FAIL_THRESHOLD) {
+                        workerState.accountErrors[user] = err.message;
+                        Account.updateMany(
+                            { imapUser: user, imapEnabled: true },
+                            { $set: { imapError: err.message } }
+                        ).catch(() => {});
+                    }
                 })
         )
     );

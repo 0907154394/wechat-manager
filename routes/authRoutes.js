@@ -51,7 +51,7 @@ router.post("/login", (req, res) => {
 
     const ADMIN_USERNAME = process.env.ADMIN_USERNAME || "admin";
     const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || "admin123";
-    if (username !== ADMIN_USERNAME || password !== ADMIN_PASSWORD) {
+    if (username.toLowerCase() !== ADMIN_USERNAME.toLowerCase() || password !== ADMIN_PASSWORD) {
         return res.status(401).json({ message: "Sai tài khoản hoặc mật khẩu" });
     }
 

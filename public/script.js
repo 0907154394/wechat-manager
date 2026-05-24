@@ -4,8 +4,21 @@ let selectedIds = new Set();
 let currentPage = 1;
 let PAGE_SIZE = 50;
 let selectedExcelFile = null;
-let publicBaseUrl = "";   // Cloudflare tunnel URL (changes on restart)
 let workerBaseUrl = "";   // Cloudflare Worker URL (stable)
+
+// ─── Sidebar toggle ───────────────────────────────────────────────────────────
+
+function toggleSidebar() {
+    const shell = document.querySelector(".page-shell");
+    const collapsed = shell.classList.toggle("sidebar-collapsed");
+    localStorage.setItem("sidebarCollapsed", collapsed ? "1" : "0");
+}
+
+function initSidebar() {
+    if (localStorage.getItem("sidebarCollapsed") === "1") {
+        document.querySelector(".page-shell")?.classList.add("sidebar-collapsed");
+    }
+}
 
 // ─── Auth ─────────────────────────────────────────────────────────────────────
 
@@ -74,14 +87,22 @@ function renderImapHealth() {
         el.innerHTML = '<span class="health-ok">Tất cả IMAP hoạt động bình thường.</span>';
         return;
     }
-    el.innerHTML = errors.map(a => `
+    // Group by imapUser — tất cả variant cùng Gmail gốc chỉ hiện 1 dòng
+    const groups = new Map();
+    for (const a of errors) {
+        const key = a.imapUser || a.email;
+        if (!groups.has(key)) groups.set(key, { msg: a.imapError, count: 0 });
+        groups.get(key).count++;
+    }
+    el.innerHTML = [...groups.entries()].map(([user, { msg, count }]) => `
         <div class="health-error-item">
             <div class="health-error-row">
                 <div>
-                    <span class="health-user">${escapeHtml(a.imapUser || a.email)}</span>
-                    <span class="health-msg">${escapeHtml(a.imapError)}</span>
+                    <span class="health-user">${escapeHtml(user)}</span>
+                    ${count > 1 ? `<span class="health-count">${count} tài khoản</span>` : ""}
+                    <span class="health-msg">${escapeHtml(msg)}</span>
                 </div>
-                <button class="link-btn health-fix-btn" onclick="editImapByUser('${escapeJs(a.imapUser || a.email)}')">Sửa IMAP</button>
+                <button class="link-btn health-fix-btn" onclick="editImapByUser('${escapeJs(user)}')">Sửa IMAP</button>
             </div>
         </div>`).join("");
 }
@@ -95,6 +116,7 @@ function editImapByUser(imapUser) {
 // ─── Init ─────────────────────────────────────────────────────────────────────
 
 window.onload = async () => {
+    initSidebar();
     bindFileDrop();
     await loadConfig();
     await loadAccounts();
@@ -109,11 +131,6 @@ window.onload = async () => {
 };
 
 async function loadConfig() {
-    try {
-        const res = await fetch("/api/config");
-        const data = await res.json();
-        if (data.publicUrl) publicBaseUrl = data.publicUrl;
-    } catch { /* dùng window.location.origin làm fallback */ }
     // Load Worker URL from settings (to build customer links)
     try {
         const res = await adminFetch("/api/settings/info");
@@ -223,7 +240,7 @@ function renderTable(data) {
     pageData.forEach((a, i) => {
         const globalIdx = start + i;
         const statusClass = a.status === "DA BAN" ? "da" : "chua";
-        const linkBase = workerBaseUrl || publicBaseUrl || window.location.origin;
+        const linkBase = workerBaseUrl || window.location.origin;
         const fullLink = a.linkToken ? linkBase + a.linkToken : "";
         const checked = selectedIds.has(a._id) ? "checked" : "";
         const imapUser = escapeJs(a.imapUser || a.email || "");
@@ -798,6 +815,22 @@ function exportAccounts() {
 }
 function c(v) { return String(v || "").replace(/"/g, '""'); }
 
+function exportForWechatShop() {
+    const toExport = filteredAccounts.filter(a => a.messageToken);
+    if (!toExport.length) { alert("Không có account nào có messageToken. Hãy tạo link trước."); return; }
+    // Format: wechatId|password|messageToken|email  (pipe-separated, one per line)
+    const lines = toExport.map(a =>
+        [a.wechatId || a.email, a.password || "", a.messageToken || "", a.email || ""].join("|")
+    );
+    const text = lines.join("\n");
+    const blob = new Blob([text], { type: "text/plain;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url; link.download = "wechat-shop-import.txt"; link.click();
+    URL.revokeObjectURL(url);
+    showToast(`Đã export ${toExport.length} account cho WeChat Shop`);
+}
+
 // ─── Worker ───────────────────────────────────────────────────────────────────
 
 async function loadWorkerStatus() {
@@ -818,21 +851,6 @@ async function loadWorkerStatus() {
         }
     } catch (err) { if (err.message !== "Session expired") console.error(err); }
 
-    // Cập nhật Tunnel URL
-    try {
-        const cfgRes = await fetch("/api/config");
-        const cfg = await cfgRes.json();
-        const bar  = document.getElementById("tunnelUrlBar");
-        const link = document.getElementById("tunnelUrlLink");
-        if (cfg.publicUrl && bar && link) {
-            publicBaseUrl = cfg.publicUrl;
-            link.href        = cfg.publicUrl;
-            link.textContent = cfg.publicUrl;
-            bar.style.display = "";
-        } else if (bar) {
-            bar.style.display = "none";
-        }
-    } catch { /* bỏ qua nếu tunnel chưa chạy */ }
 }
 
 async function generateLink(id) {
