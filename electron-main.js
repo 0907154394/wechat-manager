@@ -13,6 +13,7 @@ let cfProcess = null;
 let setupWindow = null;
 let userDataPath = null;
 let configFile = null;
+let autoUpdaterRef = null;
 
 function initPaths() {
     userDataPath = app.getPath("userData");
@@ -217,6 +218,10 @@ function createTray() {
         },
         { type: "separator" },
         {
+            label: "Kiểm tra cập nhật",
+            click: () => checkForUpdates()
+        },
+        {
             label: "Cài đặt kết nối...",
             click: () => {
                 if (setupWindow) { setupWindow.focus(); return; }
@@ -252,46 +257,71 @@ function createTray() {
 }
 
 // ── Auto Updater ──────────────────────────────────────────────────────────────
+function showUpdateError(err) {
+    const msg = err?.message || String(err);
+    console.error("[AutoUpdater]", msg);
+    if (tray) tray.setToolTip("WeChat Manager");
+    dialog.showMessageBox({
+        type: "error",
+        title: "Lỗi cập nhật",
+        message: "Không thể kiểm tra/tải cập nhật.",
+        detail: msg
+    }).catch(() => {});
+}
+
+function checkForUpdates() {
+    if (!autoUpdaterRef) return;
+    if (tray) tray.setToolTip("WeChat Manager — Đang kiểm tra cập nhật...");
+    autoUpdaterRef.checkForUpdates().catch(showUpdateError);
+}
+
 function setupAutoUpdater() {
     const { autoUpdater } = require("electron-updater");
+    autoUpdaterRef = autoUpdater;
     autoUpdater.autoDownload = true;
     autoUpdater.autoInstallOnAppQuit = true;
     autoUpdater.allowDowngrade = false;
+    autoUpdater.logger = null; // tắt log spam của electron-updater
 
-    // Xác thực với GitHub private repo
+    // Xác thực với GitHub private repo — set cả env lẫn header
     const ghToken = process.env.GH_PAT || process.env.GH_TOKEN;
     if (ghToken) {
+        process.env.GH_TOKEN = ghToken;
         autoUpdater.requestHeaders = { Authorization: `token ${ghToken}` };
+    } else {
+        console.warn("[AutoUpdater] Không có GH_TOKEN — private repo sẽ thất bại");
     }
 
-    // Download ngầm, không hỏi
     autoUpdater.on("update-available", info => {
         console.log(`[AutoUpdater] Tìm thấy v${info.version}, đang tải...`);
         if (tray) tray.setToolTip(`WeChat Manager — Đang tải v${info.version}...`);
     });
 
-    // Thanh tiến trình trên taskbar
-    autoUpdater.on("download-progress", progress => {
-        if (mainWindow) mainWindow.setProgressBar(progress.percent / 100);
+    autoUpdater.on("update-not-available", () => {
+        if (tray) tray.setToolTip("WeChat Manager");
     });
 
-    // Tải xong → thông báo tray 3 giây rồi tự cài
+    autoUpdater.on("download-progress", progress => {
+        const pct = Math.round(progress.percent);
+        if (mainWindow) mainWindow.setProgressBar(progress.percent / 100);
+        if (tray) tray.setToolTip(`WeChat Manager — Đang tải cập nhật: ${pct}%`);
+    });
+
+    // Tải xong → tự cài sau 3 giây (silent)
     autoUpdater.on("update-downloaded", info => {
         if (mainWindow) mainWindow.setProgressBar(-1);
-        if (tray) tray.setToolTip(`WeChat Manager — Đang cài v${info.version}...`);
+        if (tray) tray.setToolTip(`WeChat Manager — Cập nhật v${info.version} sẵn sàng`);
         console.log(`[AutoUpdater] v${info.version} tải xong, cài sau 3 giây...`);
         setTimeout(() => {
             autoUpdater.quitAndInstall(true, true);
         }, 3000);
     });
 
-    autoUpdater.on("error", err => {
-        console.error("[AutoUpdater]", err.message);
-    });
+    autoUpdater.on("error", showUpdateError);
 
     // Kiểm tra update 10 giây sau khi khởi động
     setTimeout(() => {
-        autoUpdater.checkForUpdatesAndNotify().catch(() => {});
+        autoUpdater.checkForUpdates().catch(showUpdateError);
     }, 10000);
 }
 
