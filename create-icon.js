@@ -1,7 +1,6 @@
 /**
  * Tạo icon app WeChat Manager (assets/icon.png + assets/icon.ico)
  * Chạy: node create-icon.js
- * Không cần cài thêm package — dùng Node.js built-in zlib.
  */
 
 const zlib = require("zlib");
@@ -9,7 +8,7 @@ const fs   = require("fs");
 const path = require("path");
 
 const SIZE = 256;
-const rgba = new Uint8Array(SIZE * SIZE * 4);
+const rgba = new Uint8Array(SIZE * SIZE * 4); // transparent by default
 
 // ── Pixel helpers ─────────────────────────────────────────────────────────
 
@@ -20,101 +19,85 @@ function setPixel(x, y, r, g, b, a = 255) {
     rgba[i]   = Math.round(rgba[i]   * (1 - fa) + r * fa);
     rgba[i+1] = Math.round(rgba[i+1] * (1 - fa) + g * fa);
     rgba[i+2] = Math.round(rgba[i+2] * (1 - fa) + b * fa);
-    rgba[i+3] = 255;
+    rgba[i+3] = Math.min(255, rgba[i+3] + Math.round(fa * 255));
 }
 
-function fillAll(r, g, b) {
-    for (let i = 0; i < SIZE * SIZE * 4; i += 4) {
-        rgba[i] = r; rgba[i+1] = g; rgba[i+2] = b; rgba[i+3] = 255;
-    }
+// Trả về 0.0 (ngoài) → 1.0 (trong) kèm AA cho cạnh
+function roundRectAlpha(px, py, x, y, w, h, r) {
+    if (px < x || px > x + w || py < y || py > y + h) return 0;
+    // Xác định góc gần nhất
+    const cx = px < x + r ? x + r : (px > x + w - r ? x + w - r : px);
+    const cy = py < y + r ? y + r : (py > y + h - r ? y + h - r : py);
+    const dist = Math.sqrt((px - cx) ** 2 + (py - cy) ** 2);
+    if (dist <= r - 1) return 1;
+    if (dist <= r + 1) return Math.max(0, (r + 1 - dist) / 2);
+    return (cx === px && cy === py) ? 1 : 0;
 }
 
-function fillCircle(cx, cy, radius, r, g, b, alpha = 255) {
-    const r2 = radius * radius;
-    for (let y = Math.max(0, Math.floor(cy - radius)); y <= Math.min(SIZE - 1, Math.ceil(cy + radius)); y++) {
-        for (let x = Math.max(0, Math.floor(cx - radius)); x <= Math.min(SIZE - 1, Math.ceil(cx + radius)); x++) {
-            const dist = Math.sqrt((x - cx) ** 2 + (y - cy) ** 2);
-            if (dist <= radius) {
-                const aa = dist > radius - 1.5 ? Math.max(0, 1 - (dist - (radius - 1.5)) / 1.5) : 1;
-                setPixel(x, y, r, g, b, Math.round(aa * alpha));
+function drawLine(x0, y0, x1, y1, thickness, r, g, b) {
+    const dx = x1 - x0, dy = y1 - y0;
+    const len = Math.sqrt(dx * dx + dy * dy);
+    const steps = Math.ceil(len * 2);
+    for (let i = 0; i <= steps; i++) {
+        const t = i / steps;
+        const cx = x0 + dx * t, cy = y0 + dy * t;
+        const rad = thickness / 2;
+        for (let py = Math.floor(cy - rad); py <= Math.ceil(cy + rad); py++) {
+            for (let px = Math.floor(cx - rad); px <= Math.ceil(cx + rad); px++) {
+                const d = Math.sqrt((px - cx) ** 2 + (py - cy) ** 2);
+                if (d <= rad) {
+                    const aa = d > rad - 1 ? Math.max(0, 1 - (d - (rad - 1))) : 1;
+                    setPixel(px, py, r, g, b, Math.round(aa * 255));
+                }
             }
         }
     }
 }
 
-// Vẽ đường thẳng dày bằng cách stamp circles dọc theo path
-function drawLine(x0, y0, x1, y1, thickness, r, g, b) {
-    const dx = x1 - x0, dy = y1 - y0;
-    const len = Math.sqrt(dx * dx + dy * dy);
-    const steps = Math.ceil(len * 1.5);
-    for (let i = 0; i <= steps; i++) {
-        const t = i / steps;
-        fillCircle(x0 + dx * t, y0 + dy * t, thickness / 2, r, g, b);
-    }
-}
-
-// Rounded rectangle
-function fillRoundRect(x, y, w, h, rx, r, g, b) {
-    // Fill center columns
-    for (let py = y + rx; py < y + h - rx; py++)
-        for (let px = x; px < x + w; px++)
-            setPixel(px, py, r, g, b);
-    // Fill top/bottom strips
-    for (let py = y; py < y + rx; py++)
-        for (let px = x + rx; px < x + w - rx; px++)
-            setPixel(px, py, r, g, b);
-    for (let py = y + h - rx; py < y + h; py++)
-        for (let px = x + rx; px < x + w - rx; px++)
-            setPixel(px, py, r, g, b);
-    // Four corners
-    fillCircle(x + rx,     y + rx,     rx, r, g, b);
-    fillCircle(x + w - rx, y + rx,     rx, r, g, b);
-    fillCircle(x + rx,     y + h - rx, rx, r, g, b);
-    fillCircle(x + w - rx, y + h - rx, rx, r, g, b);
-}
-
 // ── Vẽ icon ───────────────────────────────────────────────────────────────
 
-// 1. Nền tối #0f1e35
-fillAll(15, 30, 53);
+const PAD = 10;  // padding từ mép
+const RAD = 54;  // corner radius (tương đương ~21%)
 
-// 2. Hình tròn ngoài — viền sáng hơn #1e3a5f
-fillCircle(128, 128, 112, 30, 58, 95);
+// 1. Rounded square với gradient tím #5b7cf7 → #a78bfa (top-left → bottom-right)
+const R1 = [91,  124, 247]; // #5b7cf7
+const R2 = [167, 139, 250]; // #a78bfa
 
-// 3. Hình tròn trong — nền xanh #1a3a6e
-fillCircle(128, 128, 104, 26, 58, 110);
+for (let py = 0; py < SIZE; py++) {
+    for (let px = 0; px < SIZE; px++) {
+        const alpha = roundRectAlpha(px, py, PAD, PAD, SIZE - 2*PAD, SIZE - 2*PAD, RAD);
+        if (alpha <= 0) continue;
 
-// 4. Gradient ring — highlight trên cùng
-for (let y = 24; y < 128; y++) {
-    for (let x = 24; x < 232; x++) {
-        const dist = Math.sqrt((x - 128) ** 2 + (y - 128) ** 2);
-        if (dist <= 104) {
-            const t = 1 - (y - 24) / 104;
-            const extra = Math.round(t * 20);
-            const i = (y * SIZE + x) * 4;
-            rgba[i]   = Math.min(255, rgba[i]   + extra);
-            rgba[i+1] = Math.min(255, rgba[i+1] + extra);
-            rgba[i+2] = Math.min(255, rgba[i+2] + extra);
-        }
+        // Gradient theo đường chéo top-left → bottom-right
+        const t = Math.min(1, Math.max(0, (px - PAD + py - PAD) / (SIZE - 2*PAD + SIZE - 2*PAD)));
+        const r = Math.round(R1[0] + (R2[0] - R1[0]) * t);
+        const g = Math.round(R1[1] + (R2[1] - R1[1]) * t);
+        const b = Math.round(R1[2] + (R2[2] - R1[2]) * t);
+        setPixel(px, py, r, g, b, Math.round(alpha * 255));
     }
 }
 
-// 5. Chữ "W" trắng
-//    5 điểm: top-left, top-right, bottom-left, center, bottom-right
-const T  = 20; // độ dày nét
-const WW = 255, WG = 255, WB = 255;
+// 2. Lớp tối nhẹ ở dưới để tạo chiều sâu
+for (let py = SIZE / 2; py < SIZE - PAD; py++) {
+    for (let px = PAD; px < SIZE - PAD; px++) {
+        const alpha = roundRectAlpha(px, py, PAD, PAD, SIZE - 2*PAD, SIZE - 2*PAD, RAD);
+        if (alpha <= 0) continue;
+        const t = (py - SIZE / 2) / (SIZE / 2 - PAD) * 0.15; // tối tối đa 15%
+        const i = (py * SIZE + px) * 4;
+        rgba[i]   = Math.round(rgba[i]   * (1 - t));
+        rgba[i+1] = Math.round(rgba[i+1] * (1 - t));
+        rgba[i+2] = Math.round(rgba[i+2] * (1 - t));
+    }
+}
 
-//   TL(66,78) ── xuống ──> BL(94,178)
-//   BL(94,178) ── lên ──> MID(128,138)
-//   MID(128,138) ── xuống ──> BR(162,178)
-//   BR(162,178) ── lên ──> TR(190,78)
-drawLine(66, 78,  94, 178, T, WW, WG, WB);
-drawLine(94, 178, 128, 138, T, WW, WG, WB);
-drawLine(128, 138, 162, 178, T, WW, WG, WB);
-drawLine(162, 178, 190, 78, T, WW, WG, WB);
-
-// 6. Chấm nhỏ trang trí dưới chữ W
-fillCircle(128, 195, 7, 100, 180, 255);
+// 3. Chữ "W" trắng — nét dày 20px
+const T = 20;
+const W = 255;
+//   TL(66,76) → BL(96,176) → MID(128,136) → BR(160,176) → TR(190,76)
+drawLine( 66,  76,  96, 176, T, W, W, W);
+drawLine( 96, 176, 128, 136, T, W, W, W);
+drawLine(128, 136, 160, 176, T, W, W, W);
+drawLine(160, 176, 190,  76, T, W, W, W);
 
 // ── Build PNG ─────────────────────────────────────────────────────────────
 
@@ -142,18 +125,15 @@ function makeChunk(type, data) {
 }
 
 function buildPNG(width, height, pixels) {
-    const sig  = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]);
-
+    const sig = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]);
     const ihdrData = Buffer.alloc(13);
     ihdrData.writeUInt32BE(width, 0);
     ihdrData.writeUInt32BE(height, 4);
-    ihdrData[8] = 8;  // bit depth
-    ihdrData[9] = 6;  // RGBA
-
-    // Raw scanlines: 1 filter byte + 4 bytes/pixel
+    ihdrData[8] = 8; // bit depth
+    ihdrData[9] = 6; // RGBA
     const raw = Buffer.alloc(height * (1 + width * 4));
     for (let y = 0; y < height; y++) {
-        raw[y * (1 + width * 4)] = 0; // no filter
+        raw[y * (1 + width * 4)] = 0;
         for (let x = 0; x < width; x++) {
             const s = (y * width + x) * 4;
             const d = y * (1 + width * 4) + 1 + x * 4;
@@ -163,7 +143,6 @@ function buildPNG(width, height, pixels) {
             raw[d+3] = pixels[s+3];
         }
     }
-
     return Buffer.concat([
         sig,
         makeChunk("IHDR", ihdrData),
@@ -178,28 +157,21 @@ const outDir = path.join(__dirname, "assets");
 if (!fs.existsSync(outDir)) fs.mkdirSync(outDir);
 
 const pngData = buildPNG(SIZE, SIZE, rgba);
-const pngPath = path.join(outDir, "icon.png");
-fs.writeFileSync(pngPath, pngData);
+fs.writeFileSync(path.join(outDir, "icon.png"), pngData);
 console.log("✓ assets/icon.png");
 
-// ICO: wrap PNG trực tiếp (chuẩn ICO cho size 256x256)
 const icoHeader = Buffer.alloc(6);
-icoHeader.writeUInt16LE(0, 0); // reserved
-icoHeader.writeUInt16LE(1, 2); // type: ICO
+icoHeader.writeUInt16LE(0, 0);
+icoHeader.writeUInt16LE(1, 2); // ICO
 icoHeader.writeUInt16LE(1, 4); // 1 image
 
 const dirEntry = Buffer.alloc(16);
-dirEntry[0] = 0;  // width  0 = 256
-dirEntry[1] = 0;  // height 0 = 256
-dirEntry[2] = 0;  // palette
-dirEntry[3] = 0;  // reserved
-dirEntry.writeUInt16LE(1,  4);  // color planes
-dirEntry.writeUInt16LE(32, 6);  // bpp
-dirEntry.writeUInt32LE(pngData.length, 8);   // data size
-dirEntry.writeUInt32LE(22, 12);              // offset (6 + 16)
+dirEntry[0] = 0; dirEntry[1] = 0; dirEntry[2] = 0; dirEntry[3] = 0;
+dirEntry.writeUInt16LE(1,  4);
+dirEntry.writeUInt16LE(32, 6);
+dirEntry.writeUInt32LE(pngData.length, 8);
+dirEntry.writeUInt32LE(22, 12);
 
-const icoPath = path.join(outDir, "icon.ico");
-fs.writeFileSync(icoPath, Buffer.concat([icoHeader, dirEntry, pngData]));
+fs.writeFileSync(path.join(outDir, "icon.ico"), Buffer.concat([icoHeader, dirEntry, pngData]));
 console.log("✓ assets/icon.ico");
-
 console.log("\nXong! Chạy 'npm run electron' để thử app.");
