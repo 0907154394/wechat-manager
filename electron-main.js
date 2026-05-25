@@ -264,40 +264,25 @@ function setupAutoUpdater() {
         autoUpdater.requestHeaders = { Authorization: `token ${ghToken}` };
     }
 
+    // Download ngầm, không hỏi
     autoUpdater.on("update-available", info => {
-        dialog.showMessageBox({
-            type: "info",
-            title: "Có bản cập nhật mới",
-            message: `Phiên bản ${info.version} đang tải về nền.\nApp sẽ thông báo khi sẵn sàng cài.`,
-            buttons: ["OK"]
-        });
+        console.log(`[AutoUpdater] Tìm thấy v${info.version}, đang tải...`);
+        if (tray) tray.setToolTip(`WeChat Manager — Đang tải v${info.version}...`);
     });
 
-    // Thanh tiến trình trên taskbar icon (Windows native)
+    // Thanh tiến trình trên taskbar
     autoUpdater.on("download-progress", progress => {
-        const pct = Math.round(progress.percent);
-        if (mainWindow) {
-            mainWindow.setProgressBar(progress.percent / 100);
-            mainWindow.setTitle(`WeChat Manager — Đang tải cập nhật: ${pct}%`);
-        }
+        if (mainWindow) mainWindow.setProgressBar(progress.percent / 100);
     });
 
+    // Tải xong → thông báo tray 3 giây rồi tự cài
     autoUpdater.on("update-downloaded", info => {
-        if (mainWindow) {
-            mainWindow.setProgressBar(-1);   // xoá progress bar
-            mainWindow.setTitle("WeChat Manager");
-        }
-        dialog.showMessageBox({
-            type: "info",
-            title: `Cập nhật ${info.version} sẵn sàng`,
-            message: "Bản cập nhật đã tải xong.\nCần khởi động lại để cài đặt.",
-            buttons: ["Khởi động lại ngay", "Để sau"]
-        }).then(result => {
-            if (result.response === 0) {
-                // isSilent=false: hiện installer, isForceRunAfter=true: tự mở lại sau cài
-                autoUpdater.quitAndInstall(false, true);
-            }
-        });
+        if (mainWindow) mainWindow.setProgressBar(-1);
+        if (tray) tray.setToolTip(`WeChat Manager — Đang cài v${info.version}...`);
+        console.log(`[AutoUpdater] v${info.version} tải xong, cài sau 3 giây...`);
+        setTimeout(() => {
+            autoUpdater.quitAndInstall(true, true);
+        }, 3000);
     });
 
     autoUpdater.on("error", err => {
