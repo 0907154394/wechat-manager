@@ -174,7 +174,7 @@ async function loadAccounts(resetPage = true) {
         const url = isArchivedView ? "/api/accounts?archived=true" : "/api/accounts";
         const res = await adminFetch(url);
         const data = await safeJson(res);
-        if (!res.ok) { alert(data.message || "Không tải được dữ liệu"); return; }
+        if (!res.ok) { showToast(data.message || "Không tải được dữ liệu", true); return; }
         allAccounts = Array.isArray(data) ? data : [];
         filteredAccounts = [...allAccounts];
         if (resetPage) currentPage = 1;
@@ -182,7 +182,7 @@ async function loadAccounts(resetPage = true) {
         updateStats(allAccounts);
         renderImapHealth();
     } catch (err) {
-        if (err.message !== "Session expired") { console.error(err); alert("Lỗi kết nối server"); }
+        if (err.message !== "Session expired") { console.error(err); showToast("Lỗi kết nối server", true); }
     }
 }
 
@@ -286,7 +286,8 @@ function renderTable(data) {
                 </div>` : "-"}
             </td>
 
-            <td class="action-group">
+            <td>
+                <div class="action-group">
                 ${isArchivedView ? `
                 <button class="sell-btn" onclick="restoreAccount('${a._id}')"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle;margin-right:3px"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-4.5"/></svg>Khôi phục</button>
                 <button class="delete-btn" onclick="hardDeleteAccount('${a._id}')"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle;margin-right:3px"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/></svg>Xóa cứng</button>
@@ -300,6 +301,7 @@ function renderTable(data) {
                 <button class="link-btn" onclick="editImap('${a._id}', '${imapUser}', '${imapHost}')"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle;margin-right:3px"><rect x="2" y="4" width="20" height="16" rx="2"/><polyline points="22,6 12,13 2,6"/></svg>IMAP</button>
                 <button class="delete-btn" onclick="deleteAccount('${a._id}')"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle;margin-right:3px"><polyline points="21 8 21 21 3 21 3 8"/><rect x="1" y="3" width="22" height="5"/><line x1="10" y1="12" x2="14" y2="12"/></svg>Lưu trữ</button>
                 `}
+                </div>
             </td>
         </tr>`;
     });

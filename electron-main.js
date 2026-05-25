@@ -3,7 +3,7 @@ const path = require("path");
 const { spawn } = require("child_process");
 const fs   = require("fs");
 const net  = require("net");
-const { autoUpdater } = require("electron-updater");
+
 
 const PORT = 3000;
 
@@ -70,14 +70,6 @@ function saveConfig(cfg) {
     }
 }
 
-// IPC: setup form submits config → save → relaunch
-ipcMain.handle("save-config", async (_, cfg) => {
-    if (!cfg.MONGODB_URI) return { ok: false, error: "Thiếu MongoDB URI" };
-    for (const [k, v] of Object.entries(cfg)) if (v) process.env[k] = v;
-    if (!saveConfig(cfg)) return { ok: false, error: "Không thể lưu file config" };
-    setTimeout(() => { app.relaunch(); app.quit(); }, 400);
-    return { ok: true };
-});
 
 // Bắt lỗi uncaught trong main process — tránh Electron hiện dialog lỗi
 process.on("uncaughtException", err => {
@@ -261,6 +253,7 @@ function createTray() {
 
 // ── Auto Updater ──────────────────────────────────────────────────────────────
 function setupAutoUpdater() {
+    const { autoUpdater } = require("electron-updater");
     autoUpdater.autoDownload = true;
     autoUpdater.autoInstallOnAppQuit = true;
     autoUpdater.allowDowngrade = false;
@@ -334,6 +327,15 @@ if (!gotLock) {
 
     // ── App lifecycle ─────────────────────────────────────────────────────
     app.whenReady().then(async () => {
+        // IPC: phải đăng ký sau khi app ready
+        ipcMain.handle("save-config", async (_, cfg) => {
+            if (!cfg.MONGODB_URI) return { ok: false, error: "Thiếu MongoDB URI" };
+            for (const [k, v] of Object.entries(cfg)) if (v) process.env[k] = v;
+            if (!saveConfig(cfg)) return { ok: false, error: "Không thể lưu file config" };
+            setTimeout(() => { app.relaunch(); app.quit(); }, 400);
+            return { ok: true };
+        });
+
         initPaths();
         const hasConfig = loadConfig();
 
