@@ -31,3 +31,4 @@ run(`git push origin main`);
 run(`git push origin v${newVersion}`);
 
 console.log(`✅ v${newVersion} đã được push — GitHub Actions đang build...`);
+console.log(`   Dùng 'npm run bump' để release lần tới.`);
