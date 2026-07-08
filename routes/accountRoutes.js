@@ -82,15 +82,13 @@ function generateDotVariants(localPart) {
 }
 
 // POST /api/accounts/create-bulk
-// For Gmail: pass gmailAppPassword to auto-configure IMAP on all variants.
-// All variants share the same IMAP inbox (Gmail ignores dots), so imapUser
-// is set to the BASE email (not the variant) for correct IMAP login.
+// Tạo biến thể Gmail hàng loạt bằng cách tự sinh ra các biến thể dấu chấm (dot variants).
+// Tất cả biến thể sẽ sử dụng chung Gmail gốc khi cấu hình Google API qua OAuth2.
 router.post("/create-bulk", async (req, res) => {
     try {
         const baseEmail = normalizeEmail(req.body.baseEmail);
         const password = String(req.body.password || "").trim();
         const quantity = Number.parseInt(req.body.quantity, 10);
-        const gmailAppPassword = String(req.body.gmailAppPassword || "").replace(/\s/g, "");
 
         if (!baseEmail || !baseEmail.includes("@")) {
             return res.status(400).json({ message: "Email gốc không hợp lệ" });
@@ -129,26 +127,6 @@ router.post("/create-bulk", async (req, res) => {
 
         const existingSet = new Set(existing.map(x => x.email));
 
-        // Nếu không nhập App Password mới, thử lấy IMAP config từ variant cũ cùng Gmail gốc
-        let inheritedImap = null;
-        if (isGmail && !gmailAppPassword) {
-            const prev = await Account.findOne({
-                imapUser: baseEmail,
-                imapEnabled: true,
-                imapPass: { $ne: "" }
-            }).select("imapHost imapPort imapSecure imapUser imapPass");
-            if (prev) {
-                inheritedImap = {
-                    imapHost:    prev.imapHost,
-                    imapPort:    prev.imapPort,
-                    imapSecure:  prev.imapSecure,
-                    imapUser:    prev.imapUser,
-                    imapPass:    prev.imapPass,
-                    imapEnabled: true
-                };
-            }
-        }
-
         const docsToInsert = [];
 
         for (const local of variants) {
@@ -168,19 +146,6 @@ router.post("/create-bulk", async (req, res) => {
                 linkToken: tokens.linkToken,
                 messageToken: tokens.messageToken
             };
-
-            if (isGmail && gmailAppPassword) {
-                // App Password mới được cung cấp
-                doc.imapHost    = "imap.gmail.com";
-                doc.imapPort    = 993;
-                doc.imapSecure  = true;
-                doc.imapUser    = baseEmail;
-                doc.imapPass    = gmailAppPassword;
-                doc.imapEnabled = true;
-            } else if (inheritedImap) {
-                // Tái sử dụng IMAP config từ variant cũ cùng Gmail gốc
-                Object.assign(doc, inheritedImap);
-            }
 
             docsToInsert.push(doc);
         }
@@ -271,80 +236,7 @@ router.put("/unsell/:id", async (req, res) => {
     }
 });
 
-// Cập nhật IMAP cho TẤT CẢ accounts có cùng imapUser (cùng Gmail gốc)
-router.put("/update-imap-bulk", async (req, res) => {
-    try {
-        const imapUser = String(req.body.imapUser || "").trim().toLowerCase();
-        const imapPass = String(req.body.imapPass || "").replace(/\s/g, "");
-        const imapHost = String(req.body.imapHost || "imap.gmail.com").trim();
-        const imapPort = Number(req.body.imapPort || 993);
-        const imapSecure = req.body.imapSecure !== false;
 
-        if (!imapUser || !imapPass) {
-            return res.status(400).json({ message: "Thiếu imapUser hoặc imapPass" });
-        }
-
-        // Normalize Gmail: xóa dấu chấm để so sánh variants
-        function normalizeGmailLocal(email) {
-            const [local, domain] = email.toLowerCase().split("@");
-            if (!domain) return email.toLowerCase();
-            if (domain === "gmail.com" || domain === "googlemail.com")
-                return local.replace(/\./g, "") + "@" + domain;
-            return email.toLowerCase();
-        }
-
-        const normalizedUser = normalizeGmailLocal(imapUser);
-
-        // Lấy tất cả accounts, lọc các cái có email là variant của imapUser
-        const allAccounts = await Account.find({});
-        const matchIds = allAccounts
-            .filter(a => normalizeGmailLocal(a.email) === normalizedUser)
-            .map(a => a._id);
-
-        if (!matchIds.length) {
-            return res.status(404).json({ message: "Không tìm thấy tài khoản nào phù hợp" });
-        }
-
-        await Account.updateMany(
-            { _id: { $in: matchIds } },
-            { imapHost, imapPort, imapSecure, imapUser, imapPass, imapEnabled: true }
-        );
-
-        res.json({ message: `Đã cập nhật IMAP cho ${matchIds.length} tài khoản`, count: matchIds.length });
-    } catch (error) {
-        console.error("update-imap-bulk error:", error);
-        res.status(500).json({ message: error.message });
-    }
-});
-
-router.put("/update-imap/:id", async (req, res) => {
-    try {
-        const imapUser = String(req.body.imapUser || "").trim();
-        const imapPass = String(req.body.imapPass || "").replace(/\s/g, "");
-        const imapHost = String(req.body.imapHost || "imap.gmail.com").trim();
-        const imapPort = Number(req.body.imapPort || 993);
-        const imapSecure = req.body.imapSecure !== false;
-
-        if (!imapUser || !imapPass) {
-            return res.status(400).json({ message: "Thiếu imapUser hoặc imapPass" });
-        }
-
-        const updated = await Account.findByIdAndUpdate(
-            req.params.id,
-            { imapHost, imapPort, imapSecure, imapUser, imapPass, imapEnabled: true },
-            { new: true }
-        );
-
-        if (!updated) {
-            return res.status(404).json({ message: "Không tìm thấy account" });
-        }
-
-        res.json({ message: "Đã cập nhật IMAP", data: updated });
-    } catch (error) {
-        console.error("update-imap error:", error);
-        res.status(500).json({ message: error.message });
-    }
-});
 
 router.put("/wechat-id/:id", async (req, res) => {
     try {
@@ -439,17 +331,7 @@ router.post("/import-mail", async (req, res) => {
             const isGmail =
                 domain === "gmail.com" || domain === "googlemail.com";
 
-            // Auto-fill Gmail IMAP settings if not provided
-            const imapHost = String(parts[2] || "").trim() ||
-                (isGmail ? "imap.gmail.com" : "");
-            const rawPort2 = Number(parts[3] || 993);
-            const imapPort = (Number.isInteger(rawPort2) && rawPort2 > 0 && rawPort2 < 65536) ? rawPort2 : 993;
-            const imapUser = String(parts[4] || email).trim();
-            const imapPass = String(parts[5] || password).trim();
-            const secureRaw = String(parts[6] || "true").toLowerCase();
-            const imapSecure = secureRaw === "true";
-
-            if (!email || !password || !imapHost) continue;
+            if (!email || !password) continue;
 
             let account = await Account.findOne({ email });
 
@@ -462,25 +344,13 @@ router.post("/import-mail", async (req, res) => {
                     status: "CHUA BAN",
                     wechatId: "",
                     linkToken: tokens.linkToken,
-                    messageToken: tokens.messageToken,
-                    imapHost,
-                    imapPort,
-                    imapSecure,
-                    imapUser,
-                    imapPass,
-                    imapEnabled: true
+                    messageToken: tokens.messageToken
                 });
 
                 await account.save();
                 created++;
             } else {
                 account.password = password;
-                account.imapHost = imapHost;
-                account.imapPort = imapPort;
-                account.imapSecure = imapSecure;
-                account.imapUser = imapUser;
-                account.imapPass = imapPass;
-                account.imapEnabled = true;
                 await account.save();
                 updated++;
             }
@@ -522,12 +392,7 @@ router.post("/import-mail-file", upload.single("file"), async (req, res) => {
 
         const idx = {
             email: headers.indexOf("email"),
-            password: headers.indexOf("password"),
-            imapHost: headers.indexOf("imaphost"),
-            imapPort: headers.indexOf("imapport"),
-            imapUser: headers.indexOf("imapuser"),
-            imapPass: headers.indexOf("imappass"),
-            imapSecure: headers.indexOf("imapsecure")
+            password: headers.indexOf("password")
         };
 
         let created = 0;
@@ -543,30 +408,8 @@ router.post("/import-mail-file", upload.single("file"), async (req, res) => {
             const password = String(
                 idx.password >= 0 ? cols[idx.password] : ""
             ).trim();
-            const domain = email.split("@")[1] || "";
-            const isGmail =
-                domain === "gmail.com" || domain === "googlemail.com";
 
-            const imapHost =
-                String(idx.imapHost >= 0 ? cols[idx.imapHost] : "").trim() ||
-                (isGmail ? "imap.gmail.com" : "");
-            const rawPort = Number(idx.imapPort >= 0 ? cols[idx.imapPort] : 993);
-            const imapPort = (Number.isInteger(rawPort) && rawPort > 0 && rawPort < 65536) ? rawPort : 993;
-            const imapUser = String(
-                idx.imapUser >= 0 ? cols[idx.imapUser] : email
-            ).trim();
-            const imapPass = String(
-                idx.imapPass >= 0 ? cols[idx.imapPass] : password
-            ).trim();
-            const secureRaw = String(
-                idx.imapSecure >= 0 ? cols[idx.imapSecure] : "true"
-            ).toLowerCase();
-            const imapSecure =
-                secureRaw === "true" ||
-                secureRaw === "1" ||
-                secureRaw === "yes";
-
-            if (!email || !password || !imapHost) {
+            if (!email || !password) {
                 skipped++;
                 continue;
             }
@@ -582,25 +425,13 @@ router.post("/import-mail-file", upload.single("file"), async (req, res) => {
                     status: "CHUA BAN",
                     wechatId: "",
                     linkToken: tokens.linkToken,
-                    messageToken: tokens.messageToken,
-                    imapHost,
-                    imapPort,
-                    imapSecure,
-                    imapUser,
-                    imapPass,
-                    imapEnabled: true
+                    messageToken: tokens.messageToken
                 });
 
                 await account.save();
                 created++;
             } else {
                 account.password = password;
-                account.imapHost = imapHost;
-                account.imapPort = imapPort;
-                account.imapSecure = imapSecure;
-                account.imapUser = imapUser;
-                account.imapPass = imapPass;
-                account.imapEnabled = true;
                 await account.save();
                 updated++;
             }

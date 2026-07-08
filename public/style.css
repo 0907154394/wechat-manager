@@ -259,13 +259,13 @@ html, body {
     padding: 1px 7px;
     margin: 0 6px;
 }
-.imap-err-link {
+.gmail-err-link {
     color: var(--red);
     cursor: pointer;
     text-decoration: underline dotted;
     font-weight: 600;
 }
-.imap-err-link:hover { opacity: .8; }
+.gmail-err-link:hover { opacity: .8; }
 @keyframes cardPulse {
     0%   { box-shadow: 0 0 0 0 rgba(239,68,68,.5); }
     60%  { box-shadow: 0 0 0 8px rgba(239,68,68,0); }
@@ -273,8 +273,8 @@ html, body {
 }
 .card-highlight { animation: cardPulse .8s ease-out 2; }
 
-/* IMAP error dot in table */
-.imap-err-dot {
+/* Gmail error dot in table */
+.gmail-err-dot {
     display: inline-flex;
     align-items: center;
     justify-content: center;

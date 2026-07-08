@@ -1,7 +1,7 @@
 const fs = require("fs");
 const path = require("path");
 
-// Bắt lỗi không được xử lý — tránh crash Electron khi IMAP socket timeout
+// Bắt lỗi không được xử lý — tránh crash Electron khi đồng bộ socket timeout
 process.on("uncaughtException", err => {
     console.error("[uncaughtException]", err.message);
 });
@@ -36,7 +36,7 @@ const workerRoutes = require("./routes/workerRoutes");
 const authRoutes = require("./routes/authRoutes");
 const settingsRoutes = require("./routes/settingsRoutes");
 const { authMiddleware } = require("./middleware/auth");
-const { startWorker } = require("./imapWorker");
+const { startWorker } = require("./gmailWorker");
 
 const app = express();
 
@@ -49,7 +49,7 @@ const MONGODB_URI =
 
 const PORT = process.env.PORT || 3000;
 
-// MongoDB connect → tự động start IMAP worker sau khi kết nối
+// MongoDB connect → tự động start Gmail API worker sau khi kết nối
 global._mongoStatus = "connecting";
 mongoose
     .connect(MONGODB_URI, { serverSelectionTimeoutMS: 8000 })
@@ -79,8 +79,14 @@ mongoose
             { $set: { linkToken: "", linkTokenExpiresAt: null } }
         ).then(r => { if (r.modifiedCount) console.log(`[migration] cleared ${r.modifiedCount} old link tokens`); }).catch(() => {});
 
+        // Di trú trường imapError sang gmailError
+        Account.updateMany(
+            { imapError: { $exists: true, $ne: "" } },
+            [ { $set: { gmailError: "$imapError" } }, { $unset: ["imapError"] } ]
+        ).then(r => { if (r.modifiedCount) console.log(`[migration] migrated ${r.modifiedCount} errors to gmailError`); }).catch(() => {});
+
         startWorker();
-        console.log("IMAP worker started");
+        console.log("Gmail API worker started");
     })
     .catch((err) => {
         global._mongoStatus = "failed:" + err.message;

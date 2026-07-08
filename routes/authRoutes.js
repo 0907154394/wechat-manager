@@ -137,14 +137,14 @@ router.get("/google/callback", async (req, res) => {
         const accessToken = tokenData.access_token;
         const expiresIn = tokenData.expires_in || 3600;
 
+        const normalizedUser = normalizeGmailLocal(state);
+
         if (!refreshToken) {
             // Google only returns refresh_token on first authorization.
             // If the user already authorized, they need to select "prompt=consent" which we set,
             // but just in case, we inform them or we try to retrieve without overwriting if already stored.
-            const existingAcc = await Account.findOne({
-                $or: [{ email: state.toLowerCase() }, { imapUser: state.toLowerCase() }],
-                gmailRefreshToken: { $ne: "" }
-            });
+            const allWithToken = await Account.find({ gmailRefreshToken: { $ne: "" } });
+            const existingAcc = allWithToken.find(a => normalizeGmailLocal(a.email) === normalizedUser);
 
             if (!existingAcc) {
                 return res.status(400).send(`
@@ -154,8 +154,6 @@ router.get("/google/callback", async (req, res) => {
                 `);
             }
         }
-
-        const normalizedUser = normalizeGmailLocal(state);
 
         // Lấy tất cả accounts, lọc các cái có email là variant của imapUser
         const allAccounts = await Account.find({});
@@ -171,7 +169,7 @@ router.get("/google/callback", async (req, res) => {
             gmailAccessToken: accessToken,
             gmailTokenExpiry: new Date(Date.now() + expiresIn * 1000),
             gmailApiEnabled: true,
-            imapEnabled: false // Tắt IMAP vì chuyển sang API
+            gmailError: ""
         };
 
         if (refreshToken) {

@@ -6,7 +6,7 @@ const {
     stopWorker,
     reloadAccounts,
     getWorkerStatus
-} = require("../imapWorker");
+} = require("../gmailWorker");
 
 function safeStatus() {
     const s = getWorkerStatus();

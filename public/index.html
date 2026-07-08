@@ -133,7 +133,7 @@
             <section class="card">
                 <div class="section-title">
                     <div class="section-title-dot"></div>
-                    <h3>IMAP Worker</h3>
+                    <h3>Gmail API Worker</h3>
                 </div>
                 <div class="worker-head">
                     <div class="worker-title">
@@ -155,8 +155,7 @@
                     <h3>Import Mail</h3>
                 </div>
                 <p class="import-note">
-                    Dán dữ liệu với bất kỳ ký tự phân cách: <b>| , tab : khoảng trắng</b> — hệ thống tự nhận dạng.<br>
-                    Thứ tự cột: <b>email · password · imapHost · imapPort · imapUser · imapPass · secure</b>
+                    Định dạng mỗi dòng: <b>email | password</b> (các thông số IMAP cũ đã được lược bỏ)
                 </p>
                 <div class="smart-import-bar">
                     <button type="button" class="link-btn" onclick="downloadTemplate()">Tải template</button>
@@ -182,14 +181,13 @@
                     <h3>Tạo Gmail biến thể</h3>
                 </div>
                 <div class="form-row create-row">
-                    <input id="baseEmail"        type="text"   placeholder="Gmail gốc — vd: abc@gmail.com">
-                    <input id="quantity"         type="number" min="1" placeholder="Số lượng">
-                    <input id="gmailAppPassword" type="password" placeholder="App Password 16 ký tự">
+                    <input id="baseEmail"        type="text"   placeholder="Gmail gốc — vd: abc@gmail.com" style="flex:2">
+                    <input id="quantity"         type="number" min="1" placeholder="Số lượng" style="flex:1">
                     <button type="button" onclick="createAccounts()">Tạo biến thể</button>
                 </div>
                 <p class="import-note" style="margin-top:12px;margin-bottom:0">
-                    Gmail coi tất cả dot-variants là cùng một hộp thư.
-                    Nhập <b>App Password</b> để IMAP tự bật cho toàn bộ variants.
+                    Gmail coi tất cả các biến thể dấu chấm (dot-variants) là cùng một hộp thư.
+                    Sau khi tạo, nhấn vào nút <b>Gmail API</b> của tài khoản để liên kết qua OAuth2.
                 </p>
             </section>
         </div>
@@ -284,7 +282,7 @@
                         <div class="section-title-dot"></div>
                         <h3>Gmail API Health</h3>
                     </div>
-                    <div id="imapHealthList" class="worker-info">Đang tải...</div>
+                    <div id="gmailHealthList" class="worker-info">Đang tải...</div>
                 </section>
 
             </div>
@@ -325,7 +323,7 @@
 </div>
 
 <!-- ── Gmail API Modal ────────────────────────────────────────── -->
-<div id="imapModal" class="modal-overlay" style="display:none;">
+<div id="gmailModal" class="modal-overlay" style="display:none;">
     <div class="modal-box">
         <div class="modal-line"></div>
         <h3 class="modal-title">Kết nối Gmail API (OAuth2)</h3>
@@ -338,8 +336,8 @@
         </div>
         <div id="mi_error" style="display:none;color:#fca5a5;font-size:13px;margin-bottom:14px"></div>
         <div class="modal-footer">
-            <button class="link-btn" onclick="closeImapModal()">Huỷ</button>
-            <button id="imapSaveBtn" onclick="connectGmailApi()" style="background:#10b981;color:#fff;border-color:#10b981">Kết nối</button>
+            <button class="link-btn" onclick="closeGmailModal()">Huỷ</button>
+            <button id="gmailSaveBtn" onclick="connectGmailApi()" style="background:#10b981;color:#fff;border-color:#10b981">Kết nối</button>
         </div>
     </div>
 </div>

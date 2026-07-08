@@ -70,7 +70,7 @@ echo  [OK] cloudflared.exe da tai xong
 :start_pm2
 echo.
 echo  [*] Khoi dong tat ca services voi PM2...
-pm2 delete wechat-web wechat-imap wechat-tunnel >nul 2>&1
+pm2 delete wechat-web wechat-tunnel >nul 2>&1
 pm2 start ecosystem.config.js
 if errorlevel 1 (
     echo  [!] PM2 start that bai. Kiem tra ecosystem.config.js

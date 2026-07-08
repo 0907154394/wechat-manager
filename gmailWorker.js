@@ -4,6 +4,15 @@ const querystring = require("querystring");
 const Account = require("./models/Account");
 const Message = require("./models/Message");
 
+// Normalize Gmail local part (xóa dấu chấm)
+function normalizeGmailLocal(email) {
+    const [local, domain] = email.toLowerCase().split("@");
+    if (!domain) return email.toLowerCase();
+    if (domain === "gmail.com" || domain === "googlemail.com")
+        return local.replace(/\./g, "") + "@" + domain;
+    return email.toLowerCase();
+}
+
 // Gmail API OAuth and data retrieval helpers
 function refreshGoogleToken(refreshToken, clientId, clientSecret) {
     return new Promise((resolve, reject) => {
@@ -138,14 +147,14 @@ let workerState = {
     intervalId: null,
     watchdogId: null,
     lastError: "",
-    accountErrors: {}   // imapUser → error message
+    accountErrors: {}   // gmailUser (normalized) → error message
 };
 
 const WATCHDOG_INTERVAL = 5 * 60 * 1000;  // kiểm tra mỗi 5 phút
 const WATCHDOG_TIMEOUT  = 15 * 60 * 1000; // restart nếu không sync được trong 15 phút
 
 // Chỉ hiện lỗi sau 3 lần fail liên tiếp (~1 phút) — tránh báo lỗi transient
-const failCounts = new Map(); // imapUser → số lần fail liên tiếp
+const failCounts = new Map(); // gmailUser → số lần fail liên tiếp
 const FAIL_THRESHOLD = 3;
 
 // Decode base64 email body (handles line-wrapped base64)
@@ -445,7 +454,7 @@ async function runWorkerOnce() {
     const groups = new Map();
 
     for (const account of accounts) {
-        const baseEmail = (account.imapUser || account.email).toLowerCase().trim();
+        const baseEmail = normalizeGmailLocal(account.email);
 
         if (!groups.has(baseEmail)) {
             groups.set(baseEmail, {
@@ -469,10 +478,13 @@ async function runWorkerOnce() {
                     failCounts.delete(user);
                     delete workerState.accountErrors[user];
                     workerState.lastSuccessAt = new Date().toISOString();
-                    Account.updateMany(
-                        { $or: [{ imapUser: user }, { email: user }], gmailApiEnabled: true },
-                        { $set: { imapError: "" } }
-                    ).catch(() => {});
+                    Account.find({ gmailApiEnabled: true }).then(allAccs => {
+                        const matchingIds = allAccs.filter(a => normalizeGmailLocal(a.email) === user).map(a => a._id);
+                        Account.updateMany(
+                            { _id: { $in: matchingIds } },
+                            { $set: { gmailError: "" } }
+                        ).catch(() => {});
+                    }).catch(() => {});
                 })
                 .catch(err => {
                     const user = group.config.baseEmail;
@@ -482,10 +494,13 @@ async function runWorkerOnce() {
                     console.error("Gmail API sync error [%s] (fail %d/%d):", user, count, FAIL_THRESHOLD, err.message);
                     if (count >= FAIL_THRESHOLD) {
                         workerState.accountErrors[user] = err.message;
-                        Account.updateMany(
-                            { $or: [{ imapUser: user }, { email: user }], gmailApiEnabled: true },
-                            { $set: { imapError: err.message } }
-                        ).catch(() => {});
+                        Account.find({ gmailApiEnabled: true }).then(allAccs => {
+                            const matchingIds = allAccs.filter(a => normalizeGmailLocal(a.email) === user).map(a => a._id);
+                            Account.updateMany(
+                                { _id: { $in: matchingIds } },
+                                { $set: { gmailError: err.message } }
+                            ).catch(() => {});
+                        }).catch(() => {});
                     }
                 })
         )
@@ -513,7 +528,7 @@ function startWorker() {
         if (!workerState.running || !workerState.lastSuccessAt) return;
         const elapsed = Date.now() - new Date(workerState.lastSuccessAt).getTime();
         if (elapsed > WATCHDOG_TIMEOUT) {
-            console.warn("[Watchdog] Không sync được trong 15 phút — đang tự khởi động lại IMAP worker...");
+            console.warn("[Watchdog] Không sync được trong 15 phút — đang tự khởi động lại Gmail API worker...");
             stopWorker();
             startWorker();
         }

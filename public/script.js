@@ -90,7 +90,7 @@ async function loadSettingsSection() {
             }
         }
     } catch { /* ignore */ }
-    renderImapHealth();
+    renderGmailHealth();
 }
 
 // Google API Credentials Functions
@@ -143,19 +143,29 @@ async function saveGoogleCredentials() {
     }
 }
 
-function renderImapHealth() {
-    const el = document.getElementById("imapHealthList");
+function normalizeGmailLocal(email) {
+    const parts = email.toLowerCase().split("@");
+    if (parts.length !== 2) return email.toLowerCase();
+    const [local, domain] = parts;
+    if (domain === "gmail.com" || domain === "googlemail.com") {
+        return local.replace(/\./g, "") + "@" + domain;
+    }
+    return email.toLowerCase();
+}
+
+function renderGmailHealth() {
+    const el = document.getElementById("gmailHealthList");
     if (!el) return;
-    const errors = allAccounts.filter(a => a.imapError);
+    const errors = allAccounts.filter(a => a.gmailError);
     if (!errors.length) {
-        el.innerHTML = '<span class="health-ok">Tất cả IMAP hoạt động bình thường.</span>';
+        el.innerHTML = '<span class="health-ok">Tất cả Gmail API hoạt động bình thường.</span>';
         return;
     }
-    // Group by imapUser — tất cả variant cùng Gmail gốc chỉ hiện 1 dòng
+    // Group by base email — tất cả variant cùng Gmail gốc chỉ hiện 1 dòng
     const groups = new Map();
     for (const a of errors) {
-        const key = a.imapUser || a.email;
-        if (!groups.has(key)) groups.set(key, { msg: a.imapError, count: 0 });
+        const key = normalizeGmailLocal(a.email);
+        if (!groups.has(key)) groups.set(key, { msg: a.gmailError, count: 0 });
         groups.get(key).count++;
     }
     el.innerHTML = [...groups.entries()].map(([user, { msg, count }]) => `
@@ -166,15 +176,15 @@ function renderImapHealth() {
                     ${count > 1 ? `<span class="health-count">${count} tài khoản</span>` : ""}
                     <span class="health-msg">${escapeHtml(msg)}</span>
                 </div>
-                <button class="link-btn health-fix-btn" onclick="editImapByUser('${escapeJs(user)}')">Sửa IMAP</button>
+                <button class="link-btn health-fix-btn" onclick="editGmailByUser('${escapeJs(user)}')">Sửa Gmail API</button>
             </div>
         </div>`).join("");
 }
 
-function editImapByUser(imapUser) {
-    const acc = allAccounts.find(a => a.imapUser === imapUser || a.email === imapUser);
+function editGmailByUser(gmailUser) {
+    const acc = allAccounts.find(a => normalizeGmailLocal(a.email) === normalizeGmailLocal(gmailUser));
     if (!acc) { showToast("Không tìm thấy tài khoản này"); return; }
-    editImap(acc._id, acc.imapUser || acc.email, acc.imapHost);
+    editGmail(acc._id, acc.email);
 }
 
 // ─── Init ─────────────────────────────────────────────────────────────────────
@@ -244,7 +254,7 @@ async function loadAccounts(resetPage = true) {
         if (resetPage) currentPage = 1;
         renderTable(filteredAccounts);
         updateStats(allAccounts);
-        renderImapHealth();
+        renderGmailHealth();
     } catch (err) {
         if (err.message !== "Session expired") { console.error(err); showToast("Lỗi kết nối server", true); }
     }
@@ -307,9 +317,9 @@ function renderTable(data) {
         const linkBase = workerBaseUrl || window.location.origin;
         const fullLink = a.linkToken ? linkBase + a.linkToken : "";
         const checked = selectedIds.has(a._id) ? "checked" : "";
-        const imapUser = escapeJs(a.imapUser || a.email || "");
-        const hasImapErr = !!(a.imapError);
-        const errTitle = hasImapErr ? escapeHtml(a.imapError) : "";
+        const gmailUser = escapeJs(a.email || "");
+        const hasGmailErr = !!(a.gmailError);
+        const errTitle = hasGmailErr ? escapeHtml(a.gmailError) : "";
 
         html += `
         <tr>
@@ -320,7 +330,7 @@ function renderTable(data) {
                 <div class="token-stack">
                     <div style="display:flex;align-items:center;justify-content:center;gap:4px">
                         <span class="copy-text">${escapeHtml(a.email || "")}</span>
-                        ${hasImapErr ? `<span class="imap-err-dot" title="${errTitle}">!</span>` : (a.gmailApiEnabled ? `<span class="api-connected-dot" title="Gmail API Connected" style="background:#10b981;color:#fff;border-radius:50%;width:8px;height:8px;display:inline-block;margin-left:4px;vertical-align:middle"></span>` : "")}
+                        ${hasGmailErr ? `<span class="gmail-err-dot" title="${errTitle}">!</span>` : (a.gmailApiEnabled ? `<span class="api-connected-dot" title="Gmail API Connected" style="background:#10b981;color:#fff;border-radius:50%;width:8px;height:8px;display:inline-block;margin-left:4px;vertical-align:middle"></span>` : "")}
                     </div>
                     <div class="inline-actions">
                         <button class="copy-btn small-btn" onclick="copyText('${escapeJs(a.email || "")}')">Copy</button>
@@ -361,7 +371,7 @@ function renderTable(data) {
                 <button class="wechat-btn" onclick="updateWechatId('${a._id}')"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" style="vertical-align:middle;margin-right:3px"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>WeChat ID</button>
                 <button class="link-btn" onclick="viewMessages('${a.messageToken || ""}')"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle;margin-right:3px"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>OTP</button>
                 <button class="gen-link-btn" onclick="generateLink('${a._id}')"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle;margin-right:3px"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>Tạo link</button>
-                <button class="link-btn" onclick="editImap('${a._id}', '${imapUser}')"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle;margin-right:3px"><rect x="2" y="4" width="20" height="16" rx="2"/><polyline points="22,6 12,13 2,6"/></svg>Gmail API</button>
+                <button class="link-btn" onclick="editGmail('${a._id}', '${gmailUser}')"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle;margin-right:3px"><rect x="2" y="4" width="20" height="16" rx="2"/><polyline points="22,6 12,13 2,6"/></svg>Gmail API</button>
                 <button class="delete-btn" onclick="deleteAccount('${a._id}')"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle;margin-right:3px"><polyline points="21 8 21 21 3 21 3 8"/><rect x="1" y="3" width="22" height="5"/><line x1="10" y1="12" x2="14" y2="12"/></svg>Lưu trữ</button>
                 `}
                 </div>
@@ -689,7 +699,6 @@ async function hardDeleteAccount(id) {
 async function createAccounts() {
     const baseEmail        = document.getElementById("baseEmail")?.value.trim() || "";
     const quantity         = parseInt(document.getElementById("quantity")?.value || "0", 10);
-    const gmailAppPassword = document.getElementById("gmailAppPassword")?.value.trim() || "";
 
     if (!baseEmail) { alert("Vui lòng nhập email gốc"); return; }
     if (!quantity || quantity < 1) { alert("Vui lòng nhập số lượng"); return; }
@@ -701,19 +710,15 @@ async function createAccounts() {
         const res = await adminFetch("/api/accounts/create-bulk", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ baseEmail, quantity, gmailAppPassword })
+            body: JSON.stringify({ baseEmail, quantity })
         });
         const data = await safeJson(res);
         if (!res.ok) { alert(data.message || "Lỗi"); return; }
 
         const count = Array.isArray(data) ? data.length : 0;
-        const imapCount = Array.isArray(data) ? data.filter(a => a.imapEnabled).length : 0;
-        let msg = `Đã tạo ${count} variants`;
-        if (gmailAppPassword)       msg += " — IMAP đã bật";
-        else if (imapCount > 0)     msg += " — IMAP kế thừa từ Gmail này";
-        else                        msg += " — chưa có IMAP (nhập App Password để bật)";
+        let msg = `Đã tạo ${count} variants thành công.`;
         alert(msg);
-        ["baseEmail","quantity","gmailAppPassword"].forEach(id => {
+        ["baseEmail","quantity"].forEach(id => {
             const el = document.getElementById(id); if (el) el.value = "";
         });
         await loadAccounts();
@@ -774,7 +779,7 @@ function detectDelimiter(text) {
 }
 
 function parseSmartImport(text) {
-    const FIELDS = ["email","password","imapHost","imapPort","imapUser","imapPass","secure"];
+    const FIELDS = ["email","password"];
     const lines = text.split("\n").map(l => l.trim()).filter(Boolean);
     if (!lines.length) return [];
     const delim = detectDelimiter(text);
@@ -800,8 +805,8 @@ function smartImportPreview() {
         return;
     }
 
-    const LABELS = ["Email","Password","IMAP Host","Port","IMAP User","IMAP Pass","Secure"];
-    const KEYS   = ["email","password","imapHost","imapPort","imapUser","imapPass","secure"];
+    const LABELS = ["Email","Password"];
+    const KEYS   = ["email","password"];
 
     let html = `<div class="import-preview-header">Xem trước — ${_smartImportRows.length} dòng</div>`;
     html += `<div class="import-table-wrap"><table class="import-preview-table">`;
@@ -828,7 +833,7 @@ async function confirmSmartImport() {
     const btn = document.getElementById("importConfirmBtn");
     if (btn) { btn.disabled = true; btn.textContent = "Đang import..."; }
     const rows = _smartImportRows.map(r =>
-        [r.email, r.password, r.imapHost, r.imapPort, r.imapUser, r.imapPass, r.secure].join("|")
+        [r.email, r.password].join("|")
     ).join("\n");
     try {
         const res = await adminFetch("/api/accounts/import-mail", {
@@ -850,9 +855,9 @@ async function confirmSmartImport() {
 
 function downloadTemplate() {
     const lines = [
-        "email|password|imapHost|imapPort|imapUser|imapPass|secure",
-        "abc@gmail.com|matkhau|imap.gmail.com|993|abc@gmail.com|app-password-16-chars|true",
-        "xyz@gmail.com|matkhau2||||app-password-2|"
+        "email|password",
+        "abc@gmail.com|matkhau",
+        "xyz@gmail.com|matkhau2"
     ].join("\n");
     const blob = new Blob([lines], { type: "text/plain;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
@@ -908,8 +913,8 @@ async function loadWorkerStatus() {
         if (!badge || !info) return;
         if (res.ok && data.running) {
             badge.textContent = "ONLINE"; badge.className = "worker-badge online";
-            const errCount = allAccounts.filter(a => a.imapError).length;
-            info.innerHTML = `Worker đang chạy — Accounts: <b>${data.activeAccounts || 0}</b> | Last run: <b>${data.lastRunAt || "-"}</b>${errCount ? ` | <a class="imap-err-link" onclick="goToImapHealth()">IMAP lỗi: ${errCount}</a>` : ""}`;
+            const errCount = allAccounts.filter(a => a.gmailError).length;
+            info.innerHTML = `Worker đang chạy — Accounts: <b>${data.activeAccounts || 0}</b> | Last run: <b>${data.lastRunAt || "-"}</b>${errCount ? ` | <a class="gmail-err-link" onclick="goToGmailHealth()">Gmail lỗi: ${errCount}</a>` : ""}`;
         } else {
             badge.textContent = "OFFLINE"; badge.className = "worker-badge offline";
             info.textContent = "Worker chưa chạy.";
@@ -930,10 +935,10 @@ async function generateLink(id) {
     } catch (err) { if (err.message !== "Session expired") showToast("Lỗi kết nối"); }
 }
 
-function goToImapHealth() {
+function goToGmailHealth() {
     showSection("settings");
     setTimeout(() => {
-        const el = document.getElementById("imapHealthList");
+        const el = document.getElementById("gmailHealthList");
         if (el) {
             el.scrollIntoView({ behavior: "smooth", block: "center" });
             el.closest(".card").classList.add("card-highlight");
@@ -1047,19 +1052,19 @@ async function saveWorkerConfig() {
 
 // ─── Gmail API Modal ───────────────────────────────────────────────────────────
 
-let _imapTargetId = "";
+let _gmailTargetId = "";
 
-function editImap(id, currentUser) {
-    _imapTargetId = id;
+function editGmail(id, currentUser) {
+    _gmailTargetId = id;
     const errEl = document.getElementById("mi_error");
     if (errEl) errEl.style.display = "none";
     document.getElementById("mi_user").value = currentUser || "";
-    document.getElementById("imapModal").style.display = "flex";
+    document.getElementById("gmailModal").style.display = "flex";
 }
 
-function closeImapModal() {
-    document.getElementById("imapModal").style.display = "none";
-    _imapTargetId = "";
+function closeGmailModal() {
+    document.getElementById("gmailModal").style.display = "none";
+    _gmailTargetId = "";
 }
 
 async function connectGmailApi() {
@@ -1072,7 +1077,7 @@ async function connectGmailApi() {
         return;
     }
 
-    const btn = document.getElementById("imapSaveBtn");
+    const btn = document.getElementById("gmailSaveBtn");
     btn.disabled = true; btn.textContent = "Đang xử lý...";
 
     try {
@@ -1085,7 +1090,7 @@ async function connectGmailApi() {
 
         if (data.authUrl) {
             window.open(data.authUrl, "_blank");
-            closeImapModal();
+            closeGmailModal();
             showToast("Đã mở trang xác thực Google trong tab mới.");
         } else {
             if (errEl) { errEl.textContent = "Không lấy được Auth URL"; errEl.style.display = "block"; }

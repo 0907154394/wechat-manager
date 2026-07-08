@@ -1,5 +1,5 @@
 // ============================================================
-// Chạy IMAP worker độc lập trên máy local
+// Chạy Gmail API worker độc lập trên máy local
 // Kết nối MongoDB Atlas, không cần web server
 //
 // Cách dùng:
@@ -31,7 +31,7 @@ function loadEnv() {
 loadEnv();
 
 const mongoose = require("mongoose");
-const { startWorker, getWorkerStatus } = require("./imapWorker");
+const { startWorker, getWorkerStatus } = require("./gmailWorker");
 
 const MONGODB_URI =
     process.env.MONGODB_URI || "mongodb://127.0.0.1:27017/wechat";
