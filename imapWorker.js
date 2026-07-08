@@ -1,8 +1,106 @@
-const { ImapFlow } = require("imapflow");
 const https = require("https");
 const http  = require("http");
+const querystring = require("querystring");
 const Account = require("./models/Account");
 const Message = require("./models/Message");
+
+// Gmail API OAuth and data retrieval helpers
+function refreshGoogleToken(refreshToken, clientId, clientSecret) {
+    return new Promise((resolve, reject) => {
+        const payload = querystring.stringify({
+            refresh_token: refreshToken,
+            client_id: clientId,
+            client_secret: clientSecret,
+            grant_type: "refresh_token"
+        });
+
+        const req = https.request({
+            hostname: "oauth2.googleapis.com",
+            path: "/token",
+            method: "POST",
+            headers: {
+                "Content-Type": "application/x-www-form-urlencoded",
+                "Content-Length": Buffer.byteLength(payload)
+            }
+        }, (res) => {
+            let data = "";
+            res.on("data", chunk => data += chunk);
+            res.on("end", () => {
+                try {
+                    const parsed = JSON.parse(data);
+                    if (res.statusCode >= 200 && res.statusCode < 300) {
+                        resolve(parsed);
+                    } else {
+                        reject(new Error(parsed.error_description || parsed.error || data));
+                    }
+                } catch (err) {
+                    reject(err);
+                }
+            });
+        });
+
+        req.on("error", reject);
+        req.write(payload);
+        req.end();
+    });
+}
+
+function listGmailMessages(accessToken, q = "") {
+    return new Promise((resolve, reject) => {
+        const path = `/gmail/v1/users/me/messages?maxResults=20` + (q ? `&q=${encodeURIComponent(q)}` : "");
+        const req = https.get({
+            hostname: "gmail.googleapis.com",
+            path: path,
+            headers: {
+                "Authorization": `Bearer ${accessToken}`
+            }
+        }, (res) => {
+            let data = "";
+            res.on("data", chunk => data += chunk);
+            res.on("end", () => {
+                try {
+                    const parsed = JSON.parse(data);
+                    if (res.statusCode >= 200 && res.statusCode < 300) {
+                        resolve(parsed.messages || []);
+                    } else {
+                        reject(new Error(parsed.error?.message || data));
+                    }
+                } catch (err) {
+                    reject(err);
+                }
+            });
+        });
+        req.on("error", reject);
+    });
+}
+
+function getGmailMessageRaw(accessToken, messageId) {
+    return new Promise((resolve, reject) => {
+        const req = https.get({
+            hostname: "gmail.googleapis.com",
+            path: `/gmail/v1/users/me/messages/${messageId}?format=raw`,
+            headers: {
+                "Authorization": `Bearer ${accessToken}`
+            }
+        }, (res) => {
+            let data = "";
+            res.on("data", chunk => data += chunk);
+            res.on("end", () => {
+                try {
+                    const parsed = JSON.parse(data);
+                    if (res.statusCode >= 200 && res.statusCode < 300) {
+                        resolve(parsed);
+                    } else {
+                        reject(new Error(parsed.error?.message || data));
+                    }
+                } catch (err) {
+                    reject(err);
+                }
+            });
+        });
+        req.on("error", reject);
+    });
+}
 
 // ── Push OTP lên Cloudflare Worker ────────────────────────────────────────
 function pushToWorker(messageToken, content, email) {
@@ -177,162 +275,163 @@ function isGarbled(content) {
     return false;
 }
 
-// Sync a group of accounts that share the same IMAP credentials.
-// For Gmail: all dot-variants of the same base Gmail share one connection.
-// We match each message to an account by checking the "To:" header.
-async function syncGroup(imapConfig, accounts) {
-    const client = new ImapFlow({
-        host: imapConfig.host,
-        port: imapConfig.port,
-        secure: imapConfig.secure,
-        auth: {
-            user: imapConfig.user,
-            pass: imapConfig.pass
-        },
-        logger: false,
-        socketTimeout: 30000,    // 30s không nhận dữ liệu → cắt kết nối
-        connectionTimeout: 15000 // 15s không connect được → báo lỗi
-    });
+// Sync a group of accounts that share the same Gmail credentials (base email)
+async function syncGroup(groupConfig, accounts) {
+    const { baseEmail, refreshToken } = groupConfig;
+    const clientId = process.env.GMAIL_CLIENT_ID;
+    const clientSecret = process.env.GMAIL_CLIENT_SECRET;
 
-    // Bắt lỗi socket bắn ra ngoài Promise (timer callbacks) — tránh crash Electron
-    client.on("error", err => {
-        console.error("IMAP client error [%s]:", imapConfig.user, err.message);
-    });
+    if (!clientId || !clientSecret) {
+        throw new Error("Google Client Credentials chưa được thiết lập");
+    }
 
-    try {
-        await client.connect();
-        const lock = await client.getMailboxLock("INBOX");
+    // 1. Get or refresh access token
+    let accessToken = accounts[0].gmailAccessToken;
+    let tokenExpiry = accounts[0].gmailTokenExpiry;
 
-        try {
-            // Search messages from last 60 days to avoid fetching huge inboxes
-            const since = new Date();
-            since.setDate(since.getDate() - 60);
+    const isExpired = !accessToken || !tokenExpiry || new Date(tokenExpiry).getTime() < Date.now() + 60000;
 
-            let uids = [];
-            try {
-                uids = await client.search({ since });
-            } catch {
-                // If search fails, fall back to all
-                uids = await client.search({ all: true });
-            }
+    if (isExpired) {
+        // Refresh token
+        const refreshData = await refreshGoogleToken(refreshToken, clientId, clientSecret);
+        accessToken = refreshData.access_token;
+        const expiresIn = refreshData.expires_in || 3600;
+        tokenExpiry = new Date(Date.now() + expiresIn * 1000);
 
-            if (!uids.length) return;
+        // Update token cache in all variant accounts in DB
+        const accountIds = accounts.map(a => a._id);
+        await Account.updateMany(
+            { _id: { $in: accountIds } },
+            { $set: { gmailAccessToken: accessToken, gmailTokenExpiry: tokenExpiry } }
+        );
+    }
 
-            // Only take the latest 100 messages
-            const targetUids = uids.slice(-100);
+    // 2. Fetch list of messages (newer than 2 days to keep it fast)
+    const messages = await listGmailMessages(accessToken, "newer_than:2d");
+    if (!messages || !messages.length) return;
 
-            const messages = [];
-            for await (const msg of client.fetch(targetUids, {
-                uid: true,
-                envelope: true,
-                source: true
-            })) {
-                messages.push(msg);
-            }
+    // Build lookup map for variant accounts
+    const accountByEmail = new Map();
+    for (const account of accounts) {
+        accountByEmail.set(account.email.toLowerCase().trim(), account);
+    }
 
-            // Build lookup: exact lowercase email → account
-            // Do NOT normalize here — WeChat sends to the specific variant address
-            // e.g. "t.hienzx9@gmail.com" → only that account, not all variants
-            const accountByEmail = new Map();
-            for (const account of accounts) {
-                accountByEmail.set(account.email.toLowerCase().trim(), account);
-            }
-
-            for (const msg of messages) {
-                const subject = msg.envelope?.subject || "";
-                const sender = msg.envelope?.from?.[0]?.address || "IMAP";
-                const content = msg.source ? extractContent(msg.source) : "";
-
-                if (!content.trim()) continue;
-
-                // Match by exact To: address (case-insensitive)
-                // Fallback: parse raw To: header nếu envelope bị normalize
-                const toAddrs = msg.envelope?.to || [];
-                let targetAccounts = [];
-
-                for (const addr of toAddrs) {
-                    const addrLower = (addr.address || "").toLowerCase().trim();
-                    const found = accountByEmail.get(addrLower);
-                    if (found) targetAccounts.push(found);
-                }
-
-                // Fallback: nếu envelope.to không khớp, đọc header To: từ raw source
-                if (targetAccounts.length === 0 && msg.source) {
-                    const rawStr = msg.source.toString("utf8", 0, 2000);
-                    const toHeaderMatch = rawStr.match(/^To:\s*(.+?)(?:\r?\n(?![ \t]))/im);
-                    if (toHeaderMatch) {
-                        const rawToLine = toHeaderMatch[1];
-                        // Trích tất cả địa chỉ email trong dòng To:
-                        const emailsInTo = [...rawToLine.matchAll(/[\w.+%-]+@[\w.-]+\.\w+/g)]
-                            .map(m => m[0].toLowerCase());
-                        for (const e of emailsInTo) {
-                            const found = accountByEmail.get(e);
-                            if (found) targetAccounts.push(found);
-                        }
-                    }
-                }
-
-                // Nếu vẫn không khớp (BCC, forward...) → bỏ qua
-                if (targetAccounts.length === 0) continue;
-
-                for (const account of targetAccounts) {
-                    // Step 1: check by IMAP UID
-                    const byUid = await Message.findOne({
-                        accountId: account._id,
-                        imapUid: msg.uid
-                    });
-
-                    if (byUid) {
-                        // Content may be garbled from before MIME parser was fixed.
-                        // Overwrite if it still contains leaked MIME headers or raw base64.
-                        if (isGarbled(byUid.content)) {
-                            await Message.updateOne(
-                                { _id: byUid._id },
-                                { $set: { content } }
-                            );
-                        }
-                        continue;
-                    }
-
-                    // Step 2: old messages without imapUid — stamp uid + refresh content
-                    const bySubject = await Message.findOneAndUpdate(
-                        { accountId: account._id, subject, sender, imapUid: null },
-                        { $set: { imapUid: msg.uid, content } }
+    // RFC2047 MIME Header decoder (e.g. for subjects/senders)
+    function decodeRFC2047(str) {
+        return str.replace(/=\?([A-Za-z0-9_-]+)\?([QB])\?([^\?]+)\?=/gi, (_, charset, encoding, text) => {
+            if (encoding.toUpperCase() === "B") {
+                try { return Buffer.from(text, "base64").toString(charset || "utf8"); } catch { return text; }
+            } else if (encoding.toUpperCase() === "Q") {
+                try {
+                    return text.replace(/_/g, " ").replace(/=([0-9A-Fa-f]{2})/g, (__, hex) =>
+                        String.fromCharCode(parseInt(hex, 16))
                     );
+                } catch { return text; }
+            }
+            return text;
+        });
+    }
 
-                    if (!bySubject) {
-                        await Message.create({
-                            accountId: account._id,
-                            sender,
-                            subject,
-                            content,
-                            imapUid: msg.uid
-                        });
-                        // Đẩy OTP mới lên Cloudflare Worker
-                        if (account.messageToken) {
-                            pushToWorker(account.messageToken, content, account.email);
-                        }
-                    }
+    // 3. Process each message
+    for (const msgBrief of messages) {
+        const msgId = msgBrief.id;
+
+        // Check if all variant accounts in this group already have this message processed
+        const existingMessagesCount = await Message.countDocuments({
+            accountId: { $in: accounts.map(a => a._id) },
+            gmailMsgId: msgId
+        });
+
+        if (existingMessagesCount >= accounts.length) {
+            continue;
+        }
+
+        // Fetch Raw Message
+        const msgData = await getGmailMessageRaw(accessToken, msgId);
+        if (!msgData || !msgData.raw) continue;
+
+        const rawMime = Buffer.from(msgData.raw, "base64url");
+        const content = extractContent(rawMime);
+        if (!content.trim()) continue;
+
+        // Parse subject and sender from the raw source
+        const rawStr = rawMime.toString("utf8");
+        const subjectMatch = rawStr.match(/^Subject:\s*(.+?)(?:\r?\n(?![ \t]))/im);
+        const fromMatch = rawStr.match(/^From:\s*(.+?)(?:\r?\n(?![ \t]))/im);
+        const toMatch = rawStr.match(/^To:\s*(.+?)(?:\r?\n(?![ \t]))/im);
+
+        let subject = subjectMatch ? subjectMatch[1].trim() : "";
+        let sender = fromMatch ? fromMatch[1].trim() : "Gmail API";
+
+        subject = decodeRFC2047(subject);
+        sender = decodeRFC2047(sender);
+
+        const senderEmailMatch = sender.match(/<([^>]+)>/);
+        if (senderEmailMatch) {
+            sender = senderEmailMatch[1];
+        }
+
+        // Determine target accounts by matching the To header
+        let targetAccounts = [];
+        if (toMatch) {
+            const rawToLine = toMatch[1];
+            const emailsInTo = [...rawToLine.matchAll(/[\w.+%-]+@[\w.-]+\.\w+/g)]
+                .map(m => m[0].toLowerCase().trim());
+            
+            for (const e of emailsInTo) {
+                const found = accountByEmail.get(e);
+                if (found) targetAccounts.push(found);
+            }
+        }
+
+        if (targetAccounts.length === 0) continue;
+
+        for (const account of targetAccounts) {
+            // Check if Message with gmailMsgId exists for this specific account
+            const byGmailId = await Message.findOne({
+                accountId: account._id,
+                gmailMsgId: msgId
+            });
+
+            if (byGmailId) {
+                if (isGarbled(byGmailId.content)) {
+                    await Message.updateOne(
+                        { _id: byGmailId._id },
+                        { $set: { content } }
+                    );
+                }
+                continue;
+            }
+
+            // Fallback lookup: old messages without gmailMsgId
+            const bySubject = await Message.findOneAndUpdate(
+                { accountId: account._id, subject, sender, gmailMsgId: null },
+                { $set: { gmailMsgId: msgId, content } }
+            );
+
+            if (!bySubject) {
+                await Message.create({
+                    accountId: account._id,
+                    sender,
+                    subject,
+                    content,
+                    gmailMsgId: msgId
+                });
+
+                // Push new OTP to Cloudflare Worker
+                if (account.messageToken) {
+                    pushToWorker(account.messageToken, content, account.email);
                 }
             }
-        } finally {
-            lock.release();
         }
-    } finally {
-        await client.logout().catch(() => {});
     }
 }
 
 async function runWorkerOnce() {
-    // Sync tất cả acc có IMAP bật và chưa lưu trữ.
-    // Không lọc theo status vì acc CHUA BAN vẫn cần OTP khi đang đăng ký WeChat.
-    // Tiết kiệm tài nguyên thực sự là giảm số Gmail gốc (IMAP connections),
-    // không phải số variants — các variants cùng gốc dùng chung 1 kết nối.
+    // Find all accounts with Gmail API enabled and not archived
     const accounts = await Account.find({
-        imapEnabled: true,
-        imapHost: { $ne: "" },
-        imapUser: { $ne: "" },
-        imapPass: { $ne: "" },
+        gmailApiEnabled: true,
+        gmailRefreshToken: { $ne: "" },
         archived: { $ne: true }
     });
 
@@ -342,52 +441,49 @@ async function runWorkerOnce() {
 
     if (!accounts.length) return;
 
-    // Group accounts by IMAP credentials (host + user + pass)
-    // This allows Gmail dot-variants to share one IMAP connection
+    // Group accounts by base email (so variants share a single connection/request)
     const groups = new Map();
 
     for (const account of accounts) {
-        const key = `${account.imapHost}|${account.imapPort}|${account.imapUser}|${account.imapPass}`;
+        const baseEmail = (account.imapUser || account.email).toLowerCase().trim();
 
-        if (!groups.has(key)) {
-            groups.set(key, {
+        if (!groups.has(baseEmail)) {
+            groups.set(baseEmail, {
                 config: {
-                    host: account.imapHost,
-                    port: account.imapPort || 993,
-                    secure: account.imapSecure !== false,
-                    user: account.imapUser,
-                    pass: account.imapPass
+                    baseEmail,
+                    refreshToken: account.gmailRefreshToken
                 },
                 accounts: []
             });
         }
 
-        groups.get(key).accounts.push(account);
+        groups.get(baseEmail).accounts.push(account);
     }
 
-    // Run all IMAP groups in parallel — total time = slowest group, not sum of all
+    // Run sync in parallel for all groups
     await Promise.allSettled(
         [...groups.values()].map(group =>
             syncGroup(group.config, group.accounts)
                 .then(() => {
-                    failCounts.delete(group.config.user);
-                    delete workerState.accountErrors[group.config.user];
+                    const user = group.config.baseEmail;
+                    failCounts.delete(user);
+                    delete workerState.accountErrors[user];
                     workerState.lastSuccessAt = new Date().toISOString();
                     Account.updateMany(
-                        { imapUser: group.config.user, imapEnabled: true },
+                        { $or: [{ imapUser: user }, { email: user }], gmailApiEnabled: true },
                         { $set: { imapError: "" } }
                     ).catch(() => {});
                 })
                 .catch(err => {
-                    const user = group.config.user;
+                    const user = group.config.baseEmail;
                     const count = (failCounts.get(user) || 0) + 1;
                     failCounts.set(user, count);
                     workerState.lastError = err.message;
-                    console.error("IMAP sync error [%s] (fail %d/%d):", user, count, FAIL_THRESHOLD, err.message);
+                    console.error("Gmail API sync error [%s] (fail %d/%d):", user, count, FAIL_THRESHOLD, err.message);
                     if (count >= FAIL_THRESHOLD) {
                         workerState.accountErrors[user] = err.message;
                         Account.updateMany(
-                            { imapUser: user, imapEnabled: true },
+                            { $or: [{ imapUser: user }, { email: user }], gmailApiEnabled: true },
                             { $set: { imapError: err.message } }
                         ).catch(() => {});
                     }

@@ -36,17 +36,31 @@ const { startWorker, getWorkerStatus } = require("./imapWorker");
 const MONGODB_URI =
     process.env.MONGODB_URI || "mongodb://127.0.0.1:27017/wechat";
 
-console.log("=== IMAP Worker Standalone ===");
+console.log("=== Gmail API Worker Standalone ===");
 console.log("Connecting to MongoDB...");
 
 mongoose
     .connect(MONGODB_URI)
     .then(() => {
         console.log("MongoDB connected");
-        console.log("Starting IMAP worker...");
-        startWorker();
-        console.log("Worker running. Checking email every 30 seconds.");
-        console.log("Press Ctrl+C to stop.\n");
+
+        // Load credentials từ MongoDB Settings
+        const Settings = require("./models/Settings");
+        Settings.find({ key: { $in: ["GMAIL_CLIENT_ID", "GMAIL_CLIENT_SECRET"] } }).then(docs => {
+            for (const d of docs) process.env[d.key] = d.value;
+            if (docs.length) console.log("Gmail client credentials loaded from DB");
+            
+            console.log("Starting Gmail API worker...");
+            startWorker();
+            console.log("Worker running. Checking email every 20 seconds.");
+            console.log("Press Ctrl+C to stop.\n");
+        }).catch(err => {
+            console.error("Lỗi load credentials từ DB:", err.message);
+            console.log("Starting Gmail API worker...");
+            startWorker();
+            console.log("Worker running. Checking email every 20 seconds.");
+            console.log("Press Ctrl+C to stop.\n");
+        });
 
         // In status mỗi 60 giây
         setInterval(() => {

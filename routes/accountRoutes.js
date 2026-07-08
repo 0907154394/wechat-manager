@@ -746,4 +746,32 @@ router.delete("/hard-bulk", async (req, res) => {
     }
 });
 
+// GET /api/accounts/google-auth-url
+router.get("/google-auth-url", (req, res) => {
+    const email = String(req.query.email || "").trim().toLowerCase();
+    if (!email) {
+        return res.status(400).json({ message: "Thiếu email để xác thực" });
+    }
+
+    const clientId = process.env.GMAIL_CLIENT_ID;
+    if (!clientId) {
+        return res.status(400).json({ message: "Google Client Credentials chưa được cấu hình. Vui lòng thiết lập trong Cài đặt trước." });
+    }
+
+    const port = process.env.PORT || 3000;
+    const redirectUri = `http://localhost:${port}/api/auth/google/callback`;
+    const scope = "https://www.googleapis.com/auth/gmail.readonly";
+
+    const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?` +
+        `client_id=${encodeURIComponent(clientId)}` +
+        `&redirect_uri=${encodeURIComponent(redirectUri)}` +
+        `&response_type=code` +
+        `&scope=${encodeURIComponent(scope)}` +
+        `&access_type=offline` +
+        `&prompt=consent` +
+        `&state=${encodeURIComponent(email)}`;
+
+    res.json({ authUrl });
+});
+
 module.exports = router;

@@ -59,7 +59,7 @@ mongoose
 
         // Load credentials từ MongoDB vào process.env (đồng bộ 2 máy)
         const Settings = require("./models/Settings");
-        Settings.find({ key: { $in: ["ADMIN_USERNAME", "ADMIN_PASSWORD"] } }).then(docs => {
+        Settings.find({ key: { $in: ["ADMIN_USERNAME", "ADMIN_PASSWORD", "GMAIL_CLIENT_ID", "GMAIL_CLIENT_SECRET"] } }).then(docs => {
             for (const d of docs) process.env[d.key] = d.value;
             if (docs.length) console.log("[settings] credentials loaded from DB");
             else {

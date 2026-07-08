@@ -97,4 +97,59 @@ router.put("/worker", (req, res) => {
     res.json({ message: "Đã lưu Worker config" });
 });
 
+// GET /api/settings/gmail-client
+router.get("/gmail-client", (_req, res) => {
+    res.json({
+        hasCredentials: !!(process.env.GMAIL_CLIENT_ID && process.env.GMAIL_CLIENT_SECRET),
+        clientId: process.env.GMAIL_CLIENT_ID || ""
+    });
+});
+
+// PUT /api/settings/gmail-client
+router.put("/gmail-client", async (req, res) => {
+    const rawConfig = String(req.body.configText || "").trim();
+    let clientId = String(req.body.clientId || "").trim();
+    let clientSecret = String(req.body.clientSecret || "").trim();
+
+    if (rawConfig) {
+        try {
+            const parsed = JSON.parse(rawConfig);
+            const webOrInstalled = parsed.web || parsed.installed;
+            if (webOrInstalled) {
+                clientId = String(webOrInstalled.client_id || "").trim();
+                clientSecret = String(webOrInstalled.client_secret || "").trim();
+            } else {
+                return res.status(400).json({ message: "Không tìm thấy trường 'web' hoặc 'installed' trong credentials JSON" });
+            }
+        } catch (err) {
+            return res.status(400).json({ message: "Định dạng JSON không hợp lệ: " + err.message });
+        }
+    }
+
+    if (!clientId || !clientSecret) {
+        return res.status(400).json({ message: "Thiếu Client ID hoặc Client Secret" });
+    }
+
+    process.env.GMAIL_CLIENT_ID = clientId;
+    process.env.GMAIL_CLIENT_SECRET = clientSecret;
+
+    try {
+        updateEnvFile({ GMAIL_CLIENT_ID: clientId, GMAIL_CLIENT_SECRET: clientSecret });
+    } catch (err) {
+        return res.status(500).json({ message: "Lưu .env thất bại: " + err.message });
+    }
+
+    // Đồng bộ lên MongoDB Settings collection
+    try {
+        await Settings.bulkWrite([
+            { updateOne: { filter: { key: "GMAIL_CLIENT_ID" }, update: { $set: { value: clientId } }, upsert: true } },
+            { updateOne: { filter: { key: "GMAIL_CLIENT_SECRET" }, update: { $set: { value: clientSecret } }, upsert: true } }
+        ]);
+    } catch (err) {
+        console.error("Lưu settings MongoDB thất bại:", err.message);
+    }
+
+    res.json({ message: "Đã lưu Google Client Credentials thành công", clientId });
+});
+
 module.exports = router;

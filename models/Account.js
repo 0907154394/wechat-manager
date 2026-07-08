@@ -60,6 +60,25 @@ const AccountSchema = new mongoose.Schema({
         default: false
     },
 
+    gmailRefreshToken: {
+        type: String,
+        default: "",
+        trim: true
+    },
+    gmailAccessToken: {
+        type: String,
+        default: "",
+        trim: true
+    },
+    gmailTokenExpiry: {
+        type: Date,
+        default: null
+    },
+    gmailApiEnabled: {
+        type: Boolean,
+        default: false
+    },
+
     // Ngày đăng ký WeChat (để đếm ngược 7 ngày)
     wechatCreatedAt: {
         type: Date,
